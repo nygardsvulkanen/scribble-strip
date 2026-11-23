@@ -1,6 +1,14 @@
 # Scribble Strip
 
-A big-text window that shows what your controller is doing in Ableton Live: the track, the parameter and its value, the rack's macros, sends, meters and a picture of the synth. It listens to a Live remote script (today: [alias8-live](../alias8-live), the Livid Alias 8) over UDP and runs in any browser.
+A big-text window that shows what your controller is doing in Ableton Live: the track, the parameter and its value, the rack's macros, sends, meters and a picture of the synth. It listens to a Live remote script (today: [alias8-live](https://github.com/nygardsvulkanen/alias8-live), the Livid Alias 8) over UDP and runs in any browser.
+
+<p align="center">
+  <img src="screenshots/sh4d.jpg" width="32%" alt="Turning Cutoff on a Roland SH-4d bass track">
+  <img src="screenshots/protein.jpg" width="32%" alt="Turning Env Amt on a Waldorf Protein lead track">
+  <img src="screenshots/gr1.jpg" width="32%" alt="Turning Release on a Tasty Chips GR-1 pad track, with the release graphic">
+</p>
+
+*Portrait 1080×1920 at 150 % zoom, while a knob is turned. Demo data, not a real Live set.*
 
 - Start: double-click **Start Scribble Strip.command** (or `python3 scribble_strip.py`), then open http://localhost:8643.
 - Ports: UDP 9877 in (messages and state from the script), UDP 9878 out (commands to the script). They must match `STATUS_MIRROR_PORT` / `STATUS_CONTROL_PORT` in the script's settings.py.
