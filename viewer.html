@@ -1,0 +1,2639 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scribble Strip</title>
+<style>
+/* ---------- tokens ---------- */
+:root {
+  --base: #0d0f13;            /* page background before the optional page-colour tint */
+  --bg: var(--base);
+  --panel: #161a21;
+  --text: #f2f4f7;
+  --muted: #8b93a1;
+  --faint: #3a404b;
+  --hl: #4a515e;              /* highlight behind the overview boxes that are on the current page */
+  --accent: #5a606b;
+  --warn: #f2c12e;
+  --tintmix: 20%;
+}
+/* optional: the whole background in a muted, dark version of the page colour */
+:root.tint { --bg: color-mix(in srgb, var(--pc, var(--accent)) var(--tintmix), var(--base)); }
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg); color: var(--text); transition: background 0.3s;
+  font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+#app { flex: 1 1 auto; min-height: 0; height: 100%; display: flex; flex-direction: column; }
+
+/* ---------- top bar ---------- */
+#bar { height: 10px; background: var(--pc, var(--accent)); transition: background 0.2s; flex: 0 0 auto; }
+header { display: flex; align-items: center; gap: 12px; padding: 8px 20px; font-size: 17px; color: var(--muted); flex: 0 0 auto; }
+/* the page as a large header in the page colour: small "Page 4", big "Master" */
+#page { display: flex; align-items: baseline; gap: 10px; white-space: nowrap; }
+#pageNum { font-size: 15px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+#pageName { font-size: clamp(24px, min(3.6vw, 5.4vh), 48px); font-weight: 800; line-height: 1.05;
+  color: color-mix(in srgb, var(--pc, var(--accent)) 82%, var(--text)); transition: color 0.2s; }
+#notice { flex: 1 1 auto; min-width: 0; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--text); font-weight: 600; opacity: 0; transition: opacity 0.4s; }
+#notice.show { opacity: 1; }
+.hbtn { font: inherit; font-size: 15px; font-weight: 600; color: var(--text); background: var(--panel);
+  border: 1px solid var(--faint); border-radius: 6px; padding: 5px 9px; cursor: pointer; white-space: nowrap; }
+.hbtn:hover { border-color: var(--muted); }
+.hbtn[aria-pressed="true"] { border-color: var(--pc, var(--accent)); }
+.hbtn[hidden] { display: none; }
+.hright { margin-left: auto; display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }   /* buttons + status on the right */
+/* ---------- settings window ---------- */
+#setPanel { position: absolute; top: 58px; right: 12px; z-index: 50; width: min(360px, calc(100% - 24px)); max-height: calc(100% - 70px); overflow: auto;
+  background: var(--panel); color: var(--text); border: 1px solid var(--faint); border-radius: 12px; padding: 12px 14px 14px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.45); font-size: 15px; display: none; }
+#setPanel.show { display: block; }
+#setPanel h2 { display: flex; justify-content: space-between; align-items: center; margin: 0 0 6px; font-size: 17px; }
+/* tabs in the settings window */
+#setPanel .tabs { display: flex; gap: 4px; margin: 4px 0 8px; border-bottom: 1px solid var(--faint); }
+#setPanel .tabs button { font: inherit; font-size: 14px; font-weight: 700; color: var(--muted); background: none; border: 0;
+  border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 6px 10px; cursor: pointer; }
+#setPanel .tabs button:hover { color: var(--text); }
+#setPanel .tabs button.on { color: var(--text); border-bottom-color: var(--pc, var(--accent)); }
+#setPanel .tabpage { display: none; }
+#setPanel .tabpage.on { display: block; }
+#setPanel .tabpage > h3:first-child { margin-top: 4px; }
+#setPanel h3 { margin: 12px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+#setPanel label { display: flex; align-items: center; gap: 9px; padding: 4px 0; cursor: pointer; }
+#setPanel input { width: 17px; height: 17px; margin: 0; accent-color: var(--pc, var(--accent)); }
+#setPanel .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 0; }
+#setPanel select { font: inherit; color: var(--text); background: var(--bg, var(--base)); border: 1px solid var(--faint); border-radius: 6px; padding: 3px 6px; }
+#setPanel .key { margin-left: auto; font-size: 12px; color: var(--muted); }
+#setPanel .x { font: inherit; font-size: 20px; line-height: 1; background: none; border: 0; color: var(--muted); cursor: pointer; padding: 0 4px; }
+header { position: relative; }
+#app { position: relative; }
+/* what the settings switch off */
+:root.no-hl .knob.active { background: transparent; }
+:root.no-hl .knob.active .nm { color: var(--muted); font-weight: inherit; }
+:root.no-pick .knob.picking .arc { display: inline; }
+:root.no-pick .knob.picking .p1, :root.no-pick .knob.picking .p2 { display: none; }
+:root.no-meters .col .mtr { display: none; }
+:root.no-meters .col { padding-right: 8px; }
+:root.no-meters .col::after { right: 0; }
+:root.no-peak .col .mtr s { display: none; }
+:root.no-ov #overview { display: none; }
+:root.no-notice #notice { visibility: hidden; }
+:root.no-pmeter #meterWrap { display: none; }
+#conn { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+/* Live's transport, left of the buttons: grey = stopped / not recording; green triangle = playing;
+   red dot = arrangement recording, red ring = session recording only */
+#transport { display: flex; align-items: center; gap: 4px; padding: 3px 6px; border-radius: 8px; background: var(--panel);
+  border: 1px solid var(--faint); }
+#transport[hidden] { display: none; }
+#transport svg { width: 26px; height: 26px; display: block; }
+#transport path, #transport circle { fill: none; stroke: var(--muted); stroke-width: 2; stroke-linejoin: round; transition: fill 0.1s, stroke 0.1s; }
+#transport.play path { fill: #2fbf4a; stroke: #2fbf4a; }
+#transport.rec circle { fill: #e0201a; stroke: #e0201a; }
+#transport.srec circle { stroke: #e0201a; stroke-width: 3; }
+#app.portrait #transport svg { width: 22px; height: 22px; }
+#conn.ok #connText { display: none; }          /* connected: the green dot says it (the words only when it isn't) */
+.hbtn .la { font-size: 0.6em; font-weight: 800; margin-left: 1px; }
+/* the symbol buttons (layout, settings, float): big enough to read and hit on a small screen */
+#layoutBtn, #setBtn, #float { min-width: 1.9em; text-align: center; font-size: 24px; line-height: 1; padding: 4px 8px; }
+#app.portrait #layoutBtn, #app.portrait #setBtn, #app.portrait #float { font-size: 22px; padding: 3px 7px; }
+#dot { width: 10px; height: 10px; border-radius: 50%; background: #c8261e; }
+#dot.on { background: #1e9e50; }
+
+/* ---------- big status text + pickup meter ---------- */
+main { flex: 0 0 auto; display: flex; flex-direction: column; padding: 4px 4vw 0; position: relative; }
+main > * { transition: opacity 0.6s; }
+main.idle > :not(#ratebox):not(#owner):not(#eqviz) { opacity: 0.5; }   /* the EQ curve keeps its opaque plate */   /* the track name line never fades */
+/* the knob panel's rate macros (LFO rates ...), always shown at the right of the big text */
+#ratebox { position: absolute; top: 6px; right: 4vw; display: grid; grid-template-columns: auto auto; gap: 8px 10px; align-items: center; }
+#ratebox .rt { display: contents; }   /* graphic and text in two left-aligned columns, so the graphics line up */
+#ratebox canvas { width: clamp(54px, 7vw, 96px); height: clamp(24px, 3.2vw, 42px); }
+#ratebox .tx { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.1; }
+#ratebox .nm { font-size: clamp(11px, 1.3vw, 15px); font-weight: 700; color: var(--muted); white-space: nowrap; }
+#ratebox .v { font-size: clamp(18px, 2.6vw, 34px); font-weight: 300; font-variant-numeric: tabular-nums; white-space: nowrap; }
+#ratebox .v small { font-size: 0.55em; color: var(--muted); margin-left: 3px; }
+:root.no-ratebox #ratebox { display: none; }
+#owner .sw { display: none; width: 0.62em; height: 0.62em; border-radius: 0.12em; background: var(--tc); margin-right: 0.3em; vertical-align: 0.02em; }
+#owner .hc .sw { display: inline-block; }
+#owner .hc { color: color-mix(in srgb, var(--tc) 85%, var(--text)); }
+#owner .roleicon { display: inline-block; width: 1.05em; height: 1.05em; margin-left: 0.4em; vertical-align: -0.12em; }
+#owner .roleicon svg { width: 100%; height: 100%; display: block; overflow: visible; }
+:root.no-role #owner .roleicon { display: none; }
+#owner .chtag { display: inline-block; margin-left: 0.55em; padding: 0.06em 0.45em 0.08em; border-radius: 0.35em; vertical-align: 0.12em;
+  font-size: 0.5em; font-weight: 800; letter-spacing: 0.06em; font-variant-numeric: tabular-nums; white-space: nowrap;
+  color: color-mix(in srgb, var(--tc, var(--muted)) 70%, var(--text)); border: 2px solid color-mix(in srgb, var(--tc, var(--muted)) 75%, transparent);
+  background: color-mix(in srgb, var(--tc, var(--muted)) 16%, transparent); }
+:root.no-midich #owner .chtag { display: none; }
+:root.no-ownsq #owner .hc .sw { display: none; }
+:root.no-owncol #owner .hc { color: inherit; }
+#owner { font-size: clamp(18px, min(4.1vw, 5.3vh), 62px); color: var(--muted); font-weight: 600; line-height: 1.15;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 1.15em; }
+#main { display: block; font-size: clamp(28px, min(7.5vw, 9vh), 150px); font-weight: 800; line-height: 1.02;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#value { display: block; font-size: clamp(26px, min(6.5vw, 8vh), 130px); font-weight: 300; line-height: 1.05;
+  font-variant-numeric: tabular-nums; min-height: 1.05em; }
+/* time graphic to the left of a time value: a dot-matrix LFO, delay echoes, an envelope or a pulse */
+#tviz { display: none; height: 0.9em; width: 2.3em; margin-right: 0.3em; vertical-align: -0.1em; }
+#tviz.show { display: inline-block; }
+:root.no-tviz #tviz { display: none; }
+/* the Colour group's EQ curve, while a Colour knob is turned (placed by placeEq: under the big text, or to its right) */
+#eqviz { position: absolute; display: none; pointer-events: none; }
+#eqviz.show { display: block; }
+:root.no-eq #eqviz { display: none !important; }
+#stage.eqside #main, #stage.eqside #targets { max-width: 54%; }
+#hint { font-size: clamp(15px, min(3.4vw, 4.2vh), 60px); font-weight: 700; color: var(--warn); min-height: 1.2em; line-height: 1.2; }
+/* under a macro's value: the device parameters it moves (SHOW_MACRO_TARGETS) */
+#targets { font-size: clamp(12px, min(2.2vw, 2.7vh), 34px); font-weight: 500; color: var(--muted); line-height: 1.25; min-height: 1.25em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 0.15em; }
+#meterWrap { margin-top: clamp(6px, 1.4vh, 20px); visibility: hidden; }
+#meterWrap.show { visibility: visible; }
+#meter { position: relative; height: clamp(20px, 3.6vh, 44px); border-radius: 999px; background: var(--faint); }
+#mfill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 999px; background: var(--pc, var(--accent)); opacity: 0.35; transition: width 0.08s linear; }
+#meter.caught #mfill { opacity: 1; }
+#mgap { position: absolute; top: 0; bottom: 0; background: var(--warn); opacity: 0.28; border-radius: 999px; }
+#meter.caught #mgap { display: none; }
+#mtarget { position: absolute; top: -8px; bottom: -8px; width: 6px; margin-left: -3px; border-radius: 3px; background: var(--text); }
+#meter.caught #mtarget { display: none; }
+#mctrl { position: absolute; top: 50%; width: clamp(20px, 3.6vh, 44px); height: clamp(20px, 3.6vh, 44px); transform: translate(-50%, -50%);
+  border-radius: 50%; background: var(--warn); border: 4px solid var(--bg); transition: left 0.08s linear; }
+#meter.caught #mctrl { background: var(--pc, var(--accent)); }
+#mtext { display: flex; justify-content: space-between; gap: 12px; margin-top: 6px; font-size: clamp(13px, min(2vw, 2.6vh), 30px); color: var(--muted); font-variant-numeric: tabular-nums; }
+#mtext b { color: var(--text); }
+#mstate { font-weight: 800; color: var(--warn); }
+#meter.caught ~ #mtext #mstate { color: #1e9e50; }
+
+/* ---------- the 16 macro knobs ---------- */
+#panels { flex: 1 1 auto; min-height: 0; overflow: hidden; display: none; padding: 6px 3vw 4px; }
+#panels.show { display: flex; flex-direction: column; justify-content: safe center; }
+
+/* the effect rack's name, just above the quadrants */
+#rackname { align-self: flex-start; max-width: 100%; box-sizing: border-box; font-size: clamp(16px, 1.9vw, 24px); font-weight: 700; letter-spacing: 0.03em;
+  color: var(--muted); background: color-mix(in srgb, var(--muted) 18%, var(--base)); border-radius: 8px; padding: 3px 12px 3px 10px;
+  margin: -6px 0 8px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#rackname:empty { display: none; }
+#rackname { display: flex; align-items: center; gap: 0.45em; }
+#rackname .rt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* the kind of rack: line icons in the text colour (RACK_ICONS) */
+#rackname .ri { flex: 0 0 auto; width: 1.4em; height: 1.4em; display: block; }
+#rackname .ri * { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+#rackname .ri .f { fill: currentColor; stroke: none; }
+#rackname.many { cursor: pointer; color: var(--text); }
+/* the rack name and the rack strip share a row above the knobs */
+#rackrow { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin: -6px 0 10px 0; min-width: 0; }   /* the rack's name, the strip below it */
+#rackrow #rackstrip:empty { display: none; }
+#rackrow #rackname { margin: 0; }
+#rackrow:has(#rackname:empty):has(#rackstrip:empty) { display: none; }
+/* 1. the kind of rack in colour (--kc, set per kind): a word chip and the left edge of the rack name (kindCol), a frame round the knobs (kindFrame) */
+#rackname .kw { display: none; font-size: 0.62em; font-weight: 800; letter-spacing: 0.1em; padding: 2px 6px; border-radius: 5px;
+  color: color-mix(in srgb, var(--kc) 70%, var(--text)); background: color-mix(in srgb, var(--kc) 18%, transparent); }
+:root:not(.no-kindcol) #rackname .kw { display: inline-block; }
+:root:not(.no-kindcol) #rackname { border-left: 4px solid var(--kc, transparent); }
+:root:not(.no-kindcol) #rackname .ri { color: var(--kc, currentColor); }
+#macros { outline: 2px solid transparent; outline-offset: 2px; border-radius: 14px; position: relative; padding: 4px; }   /* space between the groups and the frame */
+:root:not(.no-kindframe) #macros.kc { outline-color: var(--kc); }
+/* 3. inside another rack: the frame is dashed (two levels: double) with "NESTED IN ..." on it */
+:root:not(.no-nestframe) #macros.nest1 { outline-style: dashed; outline-color: var(--kc, var(--muted)); }
+:root:not(.no-nestframe) #macros.nest2 { outline-style: double; outline-width: 3px; outline-offset: 1px; outline-color: var(--kc, var(--muted)); }
+:root.no-kindframe:not(.no-nestframe) #macros.nest1, :root.no-kindframe:not(.no-nestframe) #macros.nest2 { outline-color: var(--muted); }
+:root:not(.no-nestframe) #macros[data-nest]::after { content: "NESTED IN " attr(data-nest); position: absolute; top: -9px; right: 14px;
+  z-index: 3; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; padding: 0 6px; border-radius: 4px; white-space: nowrap;
+  max-width: 60%; overflow: hidden; text-overflow: ellipsis; background: var(--bg, var(--base)); color: var(--kc, var(--muted)); }
+:root.no-kindcol #macros[data-nest]::after { color: var(--muted); }
+/* page looks (settings, Racks): a frame and tag for the Detail and Dynamics pages, and the Perform · Detail · Dynamics strip */
+:root:not(.no-pageframe) #macros.pg-detail { outline: 2px dashed var(--pf-detail, #cfd3da); outline-offset: 2px; }
+:root:not(.no-pageframe) #macros.pg-dynamics { outline: 3px solid var(--pf-dyn, #f2c12e); outline-offset: 2px; }
+:root:not(.no-pageframe) #macros.pg-mix { outline: 1.5px solid var(--pf-mix, #e8eaee); outline-offset: 2px; }
+:root:not(.no-pageframe) #macros.pg-detail::after, :root:not(.no-pageframe) #macros.pg-dynamics::after, :root:not(.no-pageframe) #macros.pg-mix::after { position: absolute; top: -9px; right: 14px;
+  z-index: 3; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; padding: 0 6px; border-radius: 4px; white-space: nowrap; color: #14161b; }
+:root:not(.no-pageframe) #macros.pg-detail::after { content: "DETAIL"; background: var(--pf-detail, #cfd3da); }
+:root:not(.no-pageframe) #macros.pg-dynamics::after { content: "DYNAMICS"; background: var(--pf-dyn, #f2c12e); }
+:root:not(.no-pageframe) #macros.pg-mix::after { content: "MIX"; background: #f472b6; }
+#pgstrip { display: flex; gap: 4px; margin: 2px 4px 8px; }
+#pgstrip span { flex: 1; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; text-align: center; padding: 2px 0;
+  border-radius: 4px; background: color-mix(in srgb, var(--muted) 16%, var(--base)); color: var(--muted); opacity: 0.4; }
+#pgstrip span.has { opacity: 1; }
+#pgstrip span.on[data-p="perform"] { background: var(--text); color: var(--base); }
+#pgstrip span.on[data-p="detail"] { background: var(--pf-detail, #cfd3da); color: #14161b; }
+#pgstrip span.on[data-p="dynamics"] { background: var(--pf-dyn, #f2c12e); color: #14161b; }
+#pgstrip span[data-p="mix"] { flex: 0 0 11%; overflow: hidden; }   /* the Mix segment: about 1/9 of the strip */
+#pgstrip span.on[data-p="mix"] { background: #f472b6; color: #14161b; }
+:root.no-pagestrip #pgstrip, #pgstrip.off { display: none; }
+/* 2. the rack strip: every rack on the track in order, the one the knobs show highlighted; click = go there */
+#rackstrip { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 5px; min-width: 0; }
+:root.no-rackstrip #rackstrip { display: none; }
+.rchip { font: inherit; font-size: clamp(12px, 1.2vw, 15px); font-weight: 700; display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 9px; border-radius: 7px; cursor: pointer; white-space: nowrap; max-width: 16em; overflow: hidden; text-overflow: ellipsis;
+  color: var(--muted); background: color-mix(in srgb, var(--muted) 12%, var(--base)); border: 1px solid transparent; }
+.rchip:hover { color: var(--text); }
+.rchip i { flex: 0 0 auto; width: 0.6em; height: 0.6em; border-radius: 50%; background: var(--ck, var(--muted)); }
+.rchip.d1, .rchip.d2 { font-size: clamp(11px, 1.05vw, 13px); padding: 2px 7px; }
+.rchip .ar { opacity: 0.7; margin-right: -2px; }
+.rchip.on { color: var(--text); border-color: var(--ck, var(--text)); background: color-mix(in srgb, var(--ck, var(--muted)) 20%, var(--base)); }
+#rackname.many:hover { background: color-mix(in srgb, var(--muted) 30%, var(--base)); }
+/* the four macro groups (Makrokarta colours): strong = rings, light = background */
+#macros { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+/* each group: its name turned on the left side, then its 4 knobs */
+.grp { border-radius: 10px; padding: 3px 6px 3px 2px; border-left: 4px solid var(--gs); background: color-mix(in srgb, var(--gs) 16%, var(--base)); min-width: 0;
+  display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 2px; }
+.grp .gh { writing-mode: vertical-rl; transform: rotate(180deg); text-align: center; align-self: stretch;
+  font-size: clamp(11px, 1.1vw, 14px); font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;
+  color: color-mix(in srgb, var(--gs) 60%, var(--text)); white-space: normal; overflow: hidden; padding: 0 2px;
+  line-height: 1.05; overflow-wrap: anywhere; hyphens: auto; }    /* too long: a second line (fitHeads sets its height) */
+.grp .gk { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 4px; }
+.g1 { --gb: var(--qc-blue, #2F6EA5); --gs: var(--gb); }
+.g2 { --gb: var(--qc-orange, #C0612B); --gs: var(--gb); }
+.g3 { --gb: var(--qc-green, #4E8A3A); --gs: var(--gb); }
+.g4 { --gb: var(--qc-purple, #7A4A9A); --gs: var(--gb); }
+/* page looks (settings, Racks): Detail softened, Dynamics in shades of one colour */
+:root:not(.no-pagecol) #macros.pg-detail > .grp { --gs: color-mix(in srgb, var(--gb) var(--pd-keep, 45%), #9aa0aa); }
+:root:not(.no-pagecol) #macros.pg-dynamics > .grp:nth-child(1) { --gs: color-mix(in srgb, var(--pdyn, #4E8A3A) 65%, #ffffff); }
+:root:not(.no-pagecol) #macros.pg-dynamics > .grp:nth-child(2) { --gs: var(--pdyn, #4E8A3A); }
+:root:not(.no-pagecol) #macros.pg-dynamics > .grp:nth-child(3) { --gs: color-mix(in srgb, var(--pdyn, #4E8A3A) 75%, #000000); }
+:root:not(.no-pagecol) #macros.pg-dynamics > .grp:nth-child(4) { --gs: color-mix(in srgb, var(--pdyn, #4E8A3A) 55%, #000000); }
+/* a group with no free macro (all four empty or locked): its colour greyed out */
+#macros .grp.dead { --gs: #5f6672 !important; }
+#macros .grp.dead .gh, #macros.skin > .grp.dead .gh { color: color-mix(in srgb, var(--muted) 40%, var(--base)) !important; text-shadow: none !important; }
+.knob { display: flex; flex-direction: column; align-items: center; gap: 0; min-width: 0; border-radius: 8px; padding: 2px; transition: background 0.15s, box-shadow 0.15s; }
+/* a macro controlled by an outer rack's macro (locked): greyed out */
+.knob.locked { opacity: 0.38; filter: grayscale(1); }
+.knob svg { width: 100%; max-width: calc(clamp(46px, 11vh, 130px) * var(--ks, 1)); height: auto; display: block; }   /* --ks: fitPanel */
+.knob .trk { fill: none; stroke: var(--faint); stroke-width: 9; stroke-linecap: round; }
+.knob .arc { fill: none; stroke: color-mix(in srgb, var(--gs) 85%, #ffffff); stroke-width: 9; stroke-linecap: round; transition: stroke-dasharray 0.12s linear; }
+.knob .unit { font-size: 17px; font-weight: 600; fill: var(--muted); text-anchor: middle; dominant-baseline: central; }
+.knob .val { font-size: 22px; font-weight: 700; fill: var(--text); text-anchor: middle; dominant-baseline: central; }
+.knob .nm { font-size: clamp(12px, 1.3vw, 17px); color: var(--muted); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.knob.none { opacity: 0.3; }
+/* with Tint on, the knob panels keep their own (untinted) dark base, so they don't wash out */
+:root.tint .grp, :root.tint #pgrid .pcell.tint { box-shadow: 0 0 0 1px color-mix(in srgb, #000000 25%, transparent); }
+/* the knob being turned */
+/* just a slightly lighter version of the group's background, no outline */
+.knob.active { background: color-mix(in srgb, #ffffff 7%, color-mix(in srgb, var(--gs) 16%, var(--base))); }
+.knob.active .nm { color: var(--text); font-weight: 700; }
+/* waiting for pickup on this knob: yellow = from 0 to where your knob is (below) / the way still to go (above),
+   group colour = the rest up to the value */
+.knob .p1, .knob .p2 { fill: none; stroke-width: 9; stroke-linecap: round; display: none; }
+.knob.picking .arc { display: none; }
+.knob.picking .p1, .knob.picking .p2 { display: inline; }
+
+
+/* ---------- bottom: overview of all tracks / returns, then the 8 buttons ---------- */
+#bottom { flex: 0 0 auto; padding: 6px 4vw 14px; display: none; flex-direction: column; gap: 6px; }
+#bottom.show { display: flex; }
+#overview { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; }
+.strip { display: flex; align-items: flex-end; min-width: 0; overflow: hidden; }
+#trkStrip { align-items: stretch; }   /* equal heights, so the blue box is one straight rectangle */
+#retStrip { justify-content: flex-end; }
+/* the tracks on the controller: a blue rectangle around them, like Live's box in the Session view */
+:root { --ring: #3d8bff; }
+.ob { flex: 0 0 auto; padding: 3px 2px; display: flex; align-items: flex-end; border: 2px solid transparent; border-left-width: 0; border-right-width: 0; }
+.ob.on { border-top-color: var(--ring); border-bottom-color: var(--ring); }
+.ob.on.first { border-left: 2px solid var(--ring); border-top-left-radius: 3px; border-bottom-left-radius: 3px; }
+.ob.on.last { border-right: 2px solid var(--ring); border-top-right-radius: 3px; border-bottom-right-radius: 3px; }
+.ob i { display: block; width: clamp(13px, 1.6vw, 24px); height: var(--oh); border-radius: 3px; background: var(--c); }
+#trkStrip { --oh: clamp(18px, 2.9vh, 30px); }
+#trkStrip .ob { align-items: flex-start; }   /* track boxes line up at the top (shorter grouped ones too) */
+/* tracks inside a group are a little shorter, inside a nested group shorter still */
+.ob.d1 i { height: calc(var(--oh) * 0.78); }
+.ob.d2 i { height: calc(var(--oh) * 0.58); }
+.ob.d3 i { height: calc(var(--oh) * 0.45); }
+.ob.out i { width: 6px; opacity: 0.35; }           /* inside a folded group or a "-" track: not reachable */
+.ob.ogrp i { border-bottom: 3px solid var(--text); } /* a group track */
+/* returns: larger boxes; the bright bar = how much the selected track sends to that return */
+.ob.ret i { position: relative; overflow: hidden; width: clamp(10px, 1.2vw, 18px); height: clamp(26px, 4.6vh, 50px); border-radius: 3px;
+  background: color-mix(in srgb, var(--c) 28%, var(--bg)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 55%, var(--bg)); }
+.ob.ret i b { position: absolute; left: 0; right: 0; bottom: 0; height: var(--s, 0%); background: var(--c); transition: height 0.12s linear; }
+.stripLabel { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-right: 6px; align-self: center; }
+#retStrip .stripLabel { margin: 0 0 0 6px; order: 99; }
+
+#map { display: flex; gap: 6px; }
+/* gain reduction (from the A8 GR Post Max for Live device): orange, hanging down from 0 dB */
+:root { --grc: #ff8a1f; }
+.grp.hasgr { grid-template-columns: auto minmax(0, 1fr) auto; }
+.grm { display: none; gap: 5px; align-items: stretch; align-self: stretch; padding: 4px 2px 4px 4px; }
+.grp.hasgr .grm { display: flex; }
+.grm .sc { display: flex; flex-direction: column; justify-content: space-between; font-size: clamp(9px, 1vw, 11px); color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; position: relative; width: 1.9em; }
+.grm .sc span { position: absolute; right: 0; transform: translateY(-50%); }
+.grm .tube { position: relative; width: clamp(9px, 1.1vw, 14px); border-radius: 4px; background: color-mix(in srgb, #000000 45%, transparent); overflow: hidden; }
+.grm .tube b { position: absolute; left: 0; right: 0; top: 0; height: 100%; transform-origin: top; transform: scaleY(0); will-change: transform; background: linear-gradient(to bottom, #ffb347, var(--grc)); }
+.grm .tube s { position: absolute; left: 0; right: 0; top: -1px; height: 100%; border-top: 2px solid #ffffff; opacity: 0; will-change: transform; }
+.grm .rd { display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; min-width: 2.6em; }
+.grm .rd .n { font-size: clamp(13px, 1.6vw, 20px); font-weight: 800; color: var(--grc); font-variant-numeric: tabular-nums; }
+.grm .rd .l { font-size: clamp(9px, 0.9vw, 11px); font-weight: 800; letter-spacing: 0.1em; color: var(--muted); }
+#grbar { display: none; align-items: center; gap: 10px; margin-top: 6px; }
+#grbar.show { display: flex; }
+#grbar .k { font-size: clamp(11px, 1.2vw, 14px); font-weight: 800; letter-spacing: 0.1em; color: var(--muted); }
+#grbar .t { flex: 1 1 auto; height: clamp(10px, 1.6vh, 18px); border-radius: 9px; background: var(--faint); position: relative; overflow: hidden; }
+#grbar .t b { position: absolute; right: 0; top: 0; bottom: 0; width: 100%; transform-origin: right; transform: scaleX(0); will-change: transform; background: linear-gradient(to left, #ffb347, var(--grc)); }
+#grbar .t s { position: absolute; top: 0; bottom: 0; width: 100%; right: -1px; border-right: 2px solid #ffffff; opacity: 0; will-change: transform; }
+#grbar .n { font-size: clamp(14px, 1.8vw, 22px); font-weight: 800; color: var(--grc); min-width: 4.2em; text-align: right; font-variant-numeric: tabular-nums; }
+.col .grs { position: absolute; top: 3px; bottom: 3px; right: calc(var(--mw) + 2px); width: calc(var(--mw) - 3px); border-radius: 2px;
+  background: color-mix(in srgb, #000000 35%, transparent); overflow: hidden; z-index: 2; display: none; }
+.col .grs b { position: absolute; left: 0; right: 0; top: 0; height: 100%; transform-origin: top; transform: scaleY(0); will-change: transform; background: var(--grc); }
+.col.hasgr .grs { display: block; }
+.col.hasgr { padding-right: calc(2 * var(--mw) + 8px); }
+.col.hasgr::after { right: calc(2 * var(--mw)); }
+:root.no-grA .grp.hasgr { grid-template-columns: auto minmax(0, 1fr); }
+:root.no-grA .grm, :root.no-grC .col .grs, :root.no-grB #grbar { display: none !important; }
+:root.no-grC .col.hasgr { padding-right: calc(var(--mw) + 8px); }
+/* fader legend: what the faders do, one segment over the columns it applies to (grey = volume,
+   a send in the colour of the return it goes to, return volume / page sends in the page colour) */
+#legend { display: flex; gap: 6px; margin-bottom: -1px; }
+.rtog { flex: 0 0 auto; font: inherit; font-size: clamp(11px, 1.25vw, 15px); font-weight: 800; letter-spacing: 0.06em; cursor: pointer;
+  color: var(--muted); background: var(--panel); border: 1px solid var(--faint); border-radius: 5px; padding: 0 7px; line-height: 1.5; }
+.rtog:hover { color: var(--text); border-color: var(--muted); }
+.rtog.off { opacity: 0.7; border-style: dashed; }
+#legend .seg { flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 7px; color: var(--sc, var(--muted));
+  font-size: clamp(11px, 1.25vw, 15px); font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase; white-space: nowrap; overflow: hidden; }
+#legend .seg::after { content: ""; flex: 1 1 auto; min-width: 8px; height: 2px; border-radius: 1px; background: currentColor; opacity: 0.55; }
+#legend .seg .ic { letter-spacing: 0; font-size: 0.9em; }
+#legend .seg .tx { overflow: hidden; white-space: normal; line-height: 1.1;          /* up to two lines, then … */
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-word; }
+#legend .seg .lk { flex: 0 0 auto; font-size: 0.72em; padding: 1px 5px; border-radius: 3px; background: var(--sc); color: #ffffff; letter-spacing: 0.06em; }
+#legend .gap { flex: 0 0 2px; margin: 0 6px; }
+#app.portrait #legend { gap: 4px; }
+#app.portrait #legend .gap { margin: 0 3px; }
+.col.sendcol::after { display: none; }            /* no 0 dB mark on a send */
+/* Perform page: two rows of knobs lined up with the buttons (same gaps and divider as the button row) */
+#pgrid { display: none; flex-direction: column; gap: 0; }
+#pgrid.show { display: flex; }
+#panels.perf #macros, #panels.perf #rackname, #panels.perf #rackrow { display: none !important; }   /* the panel stays as empty space, so the buttons stay at the bottom */
+#pgrid .pcap { font-size: clamp(11px, 1.2vw, 14px); font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 2px 0 0; }
+#pgrid .prow { display: flex; gap: 6px; }
+#pgrid .pcell { flex: 1 1 0; min-width: 0; display: flex; justify-content: center; border-radius: 8px; }
+/* a muted box in the track's colour behind each knob, like the coloured column on the controller */
+#pgrid .pcell.tint { background: color-mix(in srgb, var(--cc) 16%, var(--base)); }
+#pgrid .prow + .pcap { margin-top: 4px; }
+#pgrid .divider { flex: 0 0 auto; width: 2px; margin: 4px 6px; border-radius: 1px; background: var(--muted); opacity: 0.8; }
+#pgrid .knob { width: 100%; }
+#pgrid .knob svg { max-width: clamp(40px, 12vh, 110px); }
+#pgrid .knob .nm { font-size: clamp(11px, 1.2vw, 15px); min-height: 1.2em; }
+#pgrid .knob.gone { visibility: hidden; }
+#map .col { flex: 1 1 0; min-width: 0; }
+/* where the returns begin: a vertical line with a little space on each side */
+#map .divider { flex: 0 0 auto; width: 2px; margin: 4px 6px; border-radius: 1px; background: var(--muted); opacity: 0.8; }
+/* Buttons: dull track colour, the selected track bright. The volume is a slightly brighter fill rising from the
+   bottom of the same tone (dull on dull buttons, bright on the selected one). The short line on the right = 0 dB. */
+.col { position: relative; height: clamp(52px, 11vh, 120px); border-radius: 8px; padding: 6px 8px; overflow: hidden;
+  display: flex; flex-direction: column; justify-content: space-between;
+  --rest: color-mix(in srgb, var(--c) 22%, var(--bg));
+  --fill: color-mix(in srgb, var(--c) 52%, var(--bg));
+  color: color-mix(in srgb, var(--c) 45%, var(--text));
+  background: linear-gradient(to top, var(--fill) 0, var(--fill) var(--v), var(--rest) var(--v), var(--rest) 100%);
+  background-origin: border-box; background-repeat: no-repeat;
+  border: 2px solid transparent; }
+.col::after { content: ""; position: absolute; right: var(--mw); bottom: 85%; width: 12px; height: 2px;   /* 0 dB */
+  background: currentColor; opacity: 0.75; }
+.col.empty::after { display: none; }
+/* level meter: a thin strip on the right side of each button (green, yellow near the top, red at the top);
+   the short line = the recent peak */
+#map { --mw: clamp(6px, 0.9vw, 10px); }
+.col { padding-right: calc(var(--mw) + 8px); }
+.col .mtr { position: absolute; top: 3px; bottom: 3px; right: 3px; width: calc(var(--mw) - 3px); border-radius: 2px;
+  background: color-mix(in srgb, #000000 35%, transparent); overflow: hidden; z-index: 2; }
+.col .mtr b { position: absolute; inset: 0; clip-path: inset(100% 0 0 0);
+  background: linear-gradient(to top, #2fbf4a 0, #2fbf4a 68%, #f2c12e 80%, #f2c12e 90%, #e0201a 96%); }
+.col .mtr s { position: absolute; left: 0; right: 0; height: 100%; bottom: -2px; border-top: 2px solid #ffffff; opacity: 0; will-change: transform; }
+.col.empty .mtr, #map.nometers .mtr { display: none; }
+#map.nometers .col { padding-right: 8px; }
+#map.nometers .col::after { right: 0; }
+.col.sel { --rest: color-mix(in srgb, var(--c) 62%, var(--bg)); --fill: color-mix(in srgb, var(--c) 88%, #ffffff);
+  color: #111317; border-color: var(--text); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 55%, transparent); }
+.col.empty { background: transparent; border: 2px dashed var(--faint); color: var(--muted); }
+.col.muted { filter: saturate(0.25) brightness(0.8); }
+.col .num { font-size: clamp(11px, 1.3vw, 15px); font-weight: 800; display: flex; gap: 5px; align-items: center; }
+.col .name { font-size: clamp(12px, 1.7vw, 22px); font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.col .tag { font-size: 0.8em; font-weight: 800; padding: 0 4px; border-radius: 3px; color: #ffffff; }
+.tag.m { background: #c8261e; } .tag.s { background: #1f5bd1; } .tag.r { background: rgba(0,0,0,0.4); color: #ffffff; }
+.col .arm { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: clamp(20px, 3.4vh, 36px); height: clamp(20px, 3.4vh, 36px); border-radius: 50%;
+  background: #e0201a; border: 2px solid #ffffff; box-shadow: 0 0 8px #e0201a; }
+.col .num, .col .name { position: relative; z-index: 1; }   /* the name stays readable over the arm dot */
+.col.layer { outline: 3px dashed var(--warn); outline-offset: 2px; }
+/* a yellow box with rounded corners around the return buttons, drawn behind them (placeRetBoxes) */
+#map { position: relative; }
+/* group buttons and strips: the blobby blend of their tracks' colours (setBlend), blurred; the layer is a bit
+   bigger than the button so the blur doesn't fade at the edges. Button: full strength up to the volume, paler above
+   (like the track buttons' fill); dark text with a light halo. */
+.col.blend, .chs.blend { isolation: isolate; overflow: hidden; }
+.col.blend::before, .chs.blend::before { content: ""; position: absolute; inset: -14px; z-index: -1;
+  background: var(--kg); filter: blur(10px) saturate(1.3); pointer-events: none; }
+.col .pale { display: none; }
+.col.blend .pale { display: block; position: absolute; left: 0; right: 0; top: 0; height: calc(100% - var(--v)); z-index: -1;
+  background: color-mix(in srgb, var(--bg) 50%, transparent); pointer-events: none; }
+.col.blend.sel .pale { display: none; }
+.col.blend { color: #111317; text-shadow: 0 0 6px rgba(255, 255, 255, 0.7), 0 0 2px rgba(255, 255, 255, 0.5); }
+/* channel strips: a frosted panel behind the knobs and under the name, so the labels stay readable */
+.chs.blend .sk, .chs.blend .sname { background: color-mix(in srgb, var(--base) 62%, transparent);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); border-radius: 7px; }
+.chs.blend .sname { padding: 1px 6px; justify-self: start; max-width: 100%; color: var(--text); }
+#map .retbox { position: absolute; pointer-events: none; border: 2px solid #f2c12e; border-radius: 12px;
+  background: color-mix(in srgb, #f2c12e 14%, transparent); }
+/* "*" groups: ✱ = tap for focus; the group in focus has a solid outline and a FOCUS tag */
+.col.focus { outline: 3px solid var(--text); outline-offset: 2px; }
+.tag.f { background: var(--text); color: var(--base); } .tag.fg { background: rgba(0,0,0,0.4); color: #ffffff; }
+
+#floating { flex: 1 1 auto; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 14px; color: var(--muted); font-size: 18px; text-align: center; padding: 24px; }
+#floating.show { display: flex; }
+.pip #float { display: none; }
+.pip header { padding: 6px 12px; font-size: 15px; }
+
+/* short landscape windows (e.g. a 7" screen at 1024 x 600): size the big text by height */
+@media (max-height: 700px) {
+  #app:not(.portrait) #owner { font-size: clamp(16px, 3.9vh, 46px); }
+  #app:not(.portrait) #main { font-size: clamp(22px, 7.4vh, 90px); }
+  #app:not(.portrait) #value { font-size: clamp(20px, 6.2vh, 80px); }
+  #app:not(.portrait) #hint { font-size: clamp(13px, 3.2vh, 40px); }
+  #app:not(.portrait) #meter, #app:not(.portrait) #mctrl { height: clamp(16px, 3vh, 30px); }
+  #app:not(.portrait) #mctrl { width: clamp(16px, 3vh, 30px); }
+  #app:not(.portrait) #mtext { font-size: clamp(12px, 2.4vh, 22px); margin-top: 3px; }
+  #app:not(.portrait) #panels { padding-top: 6px; }
+  #app:not(.portrait) .knob svg { max-width: calc(clamp(40px, 10.5vh, 80px) * var(--ks, 1)); }
+  #app:not(.portrait) .col { height: clamp(44px, 9vh, 90px); }
+}
+
+/* ---------- PORTRAIT: a standing 16:9 screen (e.g. a 7" display, 600 x 1024) ---------- */
+#app.portrait header { padding: 6px 12px; font-size: 15px; gap: 8px; flex-wrap: wrap; }
+#app.portrait .hright { margin-left: auto; }
+#app.portrait .hbtn { padding: 4px 8px; font-size: 14px; }
+#app.portrait #pageName { font-size: clamp(24px, 6.6vw, 44px); }
+#app.portrait #pageNum { font-size: 13px; }
+#app.portrait #notice { order: 9; flex-basis: 100%; text-align: left; }
+#app.portrait .hright { gap: 6px; }
+#app.portrait main { padding: 6px 5vw 0; }
+#app.portrait #owner { font-size: clamp(16px, min(5vw, 3.2vh), 46px); }
+#app.portrait #main { font-size: clamp(24px, min(8.5vw, 5.2vh), 90px); }
+#app.portrait #value { font-size: clamp(22px, min(7.2vw, 4.4vh), 80px); }
+#app.portrait #hint { font-size: clamp(13px, min(4.2vw, 2.6vh), 36px); }
+#app.portrait #meter, #app.portrait #mctrl { height: clamp(18px, 2.4vh, 36px); }
+#app.portrait #mctrl { width: clamp(18px, 2.4vh, 36px); }
+#app.portrait #mtext { font-size: clamp(12px, 3.6vw, 24px); }
+#app.portrait #panels { padding: 6px 3vw; }
+/* four rows of four knobs, filling the width */
+#app.portrait #macros { grid-template-columns: 1fr; gap: 6px; }
+/* space after the first 8 knobs = where the Alias 8's top knob row ends */
+#app.portrait #macros .grp:nth-child(3) { margin-top: clamp(10px, 1.8vh, 22px); }
+/* Settings "Knob order in portrait: by controller half": 1-4, 9-12 (left half of the Alias 8), then 5-8, 13-16;
+   the gap moves to where the left half ends */
+#app.portrait #macros { display: flex; flex-direction: column; }
+:root.qhalves #app.portrait #macros .grp:nth-child(1) { order: 1; }
+:root.qhalves #app.portrait #macros .grp:nth-child(3) { order: 2; margin-top: 0; }
+:root.qhalves #app.portrait #macros .grp:nth-child(2) { order: 3; margin-top: clamp(10px, 1.8vh, 22px); }
+:root.qhalves #app.portrait #macros .grp:nth-child(4) { order: 4; }
+#app.portrait .grp { padding: 3px 6px 3px 2px; }
+#app.portrait .grp .gh { font-size: clamp(11px, 2.6vw, 15px); }
+#app.portrait .grp .gk { gap: 0 6px; }
+#app.portrait .knob svg { max-width: calc(clamp(40px, 7.6vh, 110px) * var(--ks, 1)); }
+#app.portrait .knob .nm { font-size: clamp(13px, 3.4vw, 19px); }
+#app.portrait .knob .val { font-size: 22px; }
+#app.portrait #bottom { padding: 4px 3vw 10px; }
+#app.portrait #map { gap: 4px; }
+#app.portrait #pgrid .prow { gap: 4px; }
+/* Portrait on Perform and Mix: each column is a channel strip (its two knobs, a tall volume bar beside
+   them, the name below) in two rows of four, each row with its own fader legend above */
+#chs { display: none; flex-direction: column; gap: 4px; }
+#bottom.strips #chs { display: flex; }
+#bottom.strips #pgrid, #bottom.strips #legend, #bottom.strips #map { display: none !important; }
+#chs .half { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+#chs .leg { display: flex; gap: 6px; margin-top: 2px; }
+#chs .leg .seg { min-width: 0; display: flex; align-items: center; gap: 6px; color: var(--sc, var(--muted)); font-size: clamp(11px, 2.6vw, 14px);
+  font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase; white-space: nowrap; overflow: hidden; }
+#chs .leg .seg::after { content: ""; flex: 1 1 auto; min-width: 8px; height: 2px; border-radius: 1px; background: currentColor; opacity: 0.55; }
+#chs .leg .seg .tx { overflow: hidden; white-space: normal; line-height: 1.1;          /* up to two lines, then … */
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-word; }
+#chs .leg .seg .lk { flex: 0 0 auto; font-size: 0.72em; padding: 1px 5px; border-radius: 3px; background: var(--sc); color: #ffffff; }
+.chs { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) clamp(18px, 5vw, 30px); gap: 2px 3px; min-width: 0;
+  border-radius: 9px; padding: 4px 4px 3px 2px; background: color-mix(in srgb, var(--c) 16%, var(--base)); border: 2px solid transparent; }
+:root.tint .chs { box-shadow: 0 0 0 1px color-mix(in srgb, #000000 25%, transparent); }
+.chs.sel { border-color: #ffffff; }
+.chs.muted { filter: saturate(0.15) brightness(0.7); }
+.chs.layer { border: 2px dashed var(--warn); }
+.chs.empty { background: transparent; border: 2px dashed var(--faint); }
+.chs.empty > * { visibility: hidden; }
+.chs .snum { position: absolute; top: 3px; left: 6px; font-size: clamp(10px, 2.4vw, 13px); font-weight: 800; color: color-mix(in srgb, var(--c) 45%, var(--text)); z-index: 1; }
+.chs .sk { display: flex; flex-direction: column; align-items: center; justify-content: space-around; min-width: 0; padding-top: 6px; }
+.chs .sk .knob { width: 100%; }
+.chs .sk .knob svg { max-width: clamp(40px, 7.4vh, 110px); }
+.chs .sk .knob .nm { font-size: clamp(10px, 2.7vw, 15px); }
+.chs .sbar { position: relative; border-radius: 6px; overflow: hidden; background: color-mix(in srgb, var(--c) 24%, var(--base)); }
+.chs .sbar .fill { position: absolute; left: 0; right: 0; bottom: 0; height: 100%; transform-origin: bottom; transform: scaleY(var(--v, 0));
+  background: color-mix(in srgb, var(--c) 55%, var(--base)); transition: transform 0.12s linear; }
+.chs.sel .sbar .fill { background: color-mix(in srgb, var(--c) 88%, #ffffff); }
+.chs .sbar .zero { position: absolute; left: 0; width: 45%; bottom: 85%; height: 2px; background: var(--text); opacity: 0.6; }
+.chs.send .sbar .zero { display: none; }
+.chs .sbar .mtr { position: absolute; top: 3px; bottom: 3px; right: 3px; width: clamp(4px, 1.2vw, 7px); border-radius: 2px;
+  background: color-mix(in srgb, #000000 40%, transparent); overflow: hidden; z-index: 2; }
+.chs .sbar .mtr b { position: absolute; inset: 0; clip-path: inset(100% 0 0 0);
+  background: linear-gradient(to top, #2fbf4a 0, #2fbf4a 68%, #f2c12e 80%, #f2c12e 90%, #e0201a 96%); }
+.chs .sbar .mtr s { position: absolute; left: 0; right: 0; height: 100%; bottom: -2px; border-top: 2px solid #ffffff; opacity: 0; will-change: transform; }
+:root.no-meters .chs .sbar .mtr { display: none; }
+:root.no-peak .chs .sbar .mtr s { display: none; }
+.chs .sbar .grs { display: none; position: absolute; top: 3px; bottom: 3px; right: calc(clamp(4px, 1.2vw, 7px) + 5px); width: clamp(3px, 1vw, 6px);
+  border-radius: 2px; background: color-mix(in srgb, #000000 35%, transparent); overflow: hidden; z-index: 2; }
+.chs .sbar .grs b { position: absolute; left: 0; right: 0; top: 0; height: 100%; transform-origin: top; transform: scaleY(0); background: var(--grc); }
+.chs.hasgr .sbar .grs { display: block; }
+:root.no-grC .chs .sbar .grs { display: none !important; }
+.chs .sbar .solo { position: absolute; top: 3px; left: 2px; font-size: clamp(9px, 2.2vw, 12px); font-weight: 800; padding: 0 3px; border-radius: 3px;
+  background: #1f5bd1; color: #ffffff; z-index: 3; }
+.chs .sbar .arm { position: absolute; bottom: 5px; left: 50%; transform: translateX(-50%); width: clamp(10px, 2.6vw, 16px); height: clamp(10px, 2.6vw, 16px);
+  border-radius: 50%; background: #e0201a; border: 2px solid #ffffff; z-index: 3; }
+.chs .sname { grid-column: 1 / -1; font-size: clamp(11px, 2.9vw, 15px); font-weight: 800; padding-left: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: color-mix(in srgb, var(--c) 55%, var(--text)); }
+.chs .sname .tag { font-size: 0.72em; background: rgba(0, 0, 0, 0.4); color: #ffffff; padding: 0 3px; border-radius: 3px; margin-left: 4px; }
+#app.portrait #pgrid .divider { margin: 4px 3px; }
+#app.portrait #pgrid .knob svg { max-width: clamp(36px, 9vh, 120px); }
+#app.portrait #pgrid .knob .val { font-size: 26px; }
+#app.portrait #map .divider { margin: 4px 3px; }
+#app.portrait .col { height: clamp(50px, 7.5vh, 96px); padding: 4px 5px; }
+#app.portrait .col .num { font-size: clamp(10px, 2.4vw, 14px); gap: 3px; }
+#app.portrait .col .name { font-size: clamp(10px, 2.7vw, 16px); }
+#app.portrait .col .tag { font-size: 0.72em; padding: 0 2px; }
+#app.portrait .ob i { width: clamp(12px, 3vw, 20px); }
+#app.portrait #trkStrip { --oh: clamp(18px, 2.4vh, 28px); }
+#app.portrait .ob.out i { width: 6px; }
+#app.portrait .ob.ret i { width: clamp(11px, 2.8vw, 18px); height: clamp(26px, 4vh, 44px); }
+#app.portrait .stripLabel { display: none; }
+/* ---------- synth picture, faceplate skin and role graphic behind the knobs (settings.py section 14) ---------- */
+#macros > .grp { position: relative; z-index: 1; }
+#app { isolation: isolate; }
+/* the info text and the rack name stay on top of everything, also over the role sparkle */
+main#stage { z-index: 6; }
+#rackrow { position: relative; z-index: 6; }
+/* the synth picture: the whole window's background, against the right edge, fading out to the left;
+   in landscape it is enlarged so its width covers the window */
+#synthbg { position: absolute; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; opacity: 0; transition: opacity 0.5s ease; }
+#synthbg i { position: absolute; inset: 0; background: var(--artimg, none) right center / auto 100% no-repeat;
+  filter: saturate(0.85) contrast(1.05);
+  -webkit-mask-image: linear-gradient(to left, #000 0%, #000 18%, rgba(0,0,0,0.45) 45%, transparent 78%);
+  mask-image: linear-gradient(to left, #000 0%, #000 18%, rgba(0,0,0,0.45) 45%, transparent 78%); }
+#app:not(.portrait) #synthbg i { background-size: cover; }
+#app.portrait #synthbg i { -webkit-mask-image: linear-gradient(to left, #000 0%, rgba(0,0,0,0.6) 40%, transparent 92%);
+  mask-image: linear-gradient(to left, #000 0%, rgba(0,0,0,0.6) 40%, transparent 92%); }
+#synthbg.on { opacity: 0.75; }
+#synthbg.swap { opacity: 0 !important; transition-duration: 0.15s; }
+:root.no-art #synthbg { display: none; }
+/* faceplate (every synth alike): dark plate, the group's own colour as a bar on the left fading out to the right,
+   and a line under each group in the synth's accent colour */
+#macros.skin { --sp: #14161b; --base: var(--sp); --text: #f2f4f7; --muted: #9aa2b0; --faint: color-mix(in srgb, #ffffff 16%, #14161b); }
+#macros.skin > .grp { border-left-color: var(--gs);
+  background:
+    radial-gradient(120% 90% at 20% 0%, rgba(255,255,255,0.05), transparent 60%),
+    linear-gradient(90deg, color-mix(in srgb, var(--gs) 78%, var(--sp)) 0, color-mix(in srgb, var(--gs) 48%, var(--sp)) 26px,
+      color-mix(in srgb, color-mix(in srgb, var(--gs) 16%, var(--sp)) 92%, transparent) 30%,
+      color-mix(in srgb, var(--sp) 74%, transparent) 60%, color-mix(in srgb, var(--sp) 55%, transparent) 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), inset 0 -2px 0 color-mix(in srgb, var(--sa) 70%, transparent), 0 1px 2px rgba(0,0,0,0.35); }
+#macros.skin > .grp .gh { color: color-mix(in srgb, #ffffff 88%, var(--gs)); text-shadow: 0 1px 1px rgba(0,0,0,0.35); }
+#macros.skin .knob .trk { stroke: color-mix(in srgb, var(--sa) 22%, var(--faint)); }
+#macros.skin .knob.active { background: color-mix(in srgb, var(--sa) 14%, color-mix(in srgb, var(--sp) 80%, transparent)); }
+:root.no-skin #macros.skin > .grp { background: color-mix(in srgb, var(--gs) 16%, var(--sp)); }
+:root.no-edge #macros.skin > .grp { box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), 0 1px 2px rgba(0,0,0,0.35); }
+:root.no-edge #macros.skin .knob .trk { stroke: var(--faint); }
+/* a line in the track's colour along the left edge, from under the top bar to just above the track buttons */
+#sideline { position: absolute; left: 0; top: 0; height: 0; width: 5px; z-index: 7; pointer-events: none; opacity: 0;
+  border-radius: 0 4px 4px 0; background: var(--slc, transparent); transition: opacity 0.3s ease, background-color 0.3s ease;
+}
+#sideline.on { opacity: 1; }
+:root.no-sideline #sideline { display: none; }
+/* the pictures are decoration only: no clicking, dragging or selecting them */
+#synthbg, #synthbg i { pointer-events: none !important; user-select: none; -webkit-user-select: none; -webkit-user-drag: none; }
+#app { user-select: none; -webkit-user-select: none; }
+</style>
+</head>
+<body>
+<div id="app">
+<div id="synthbg" aria-hidden="true"><i></i></div><div id="sideline" aria-hidden="true"></div>
+<div id="bar"></div>
+<header>
+  <div id="page"><span id="pageNum"></span><span id="pageName">Alias 8</span></div>
+  <div id="notice"></div>
+  <div class="hright">
+  <div id="transport" aria-label="Live transport" title="Live: play / record">
+    <svg id="tPlay" viewBox="0 0 24 24" aria-label="stopped"><path d="M7 4.5 L19.5 12 L7 19.5 Z"/></svg>
+    <svg id="tRec" viewBox="0 0 24 24" aria-label="not recording"><circle cx="12" cy="12" r="7.5"/></svg>
+  </div>
+  <button id="layoutBtn" class="hbtn" type="button" title="Landscape / portrait layout · key L">▭ Auto</button>
+  <button id="setBtn" class="hbtn" type="button" aria-pressed="false" title="Settings · key ," aria-label="Settings">⚙</button>
+  <button id="float" class="hbtn" type="button" hidden title="Float on top: open the viewer in a small window that stays on top of Live" aria-label="Float on top">⧉</button>
+  <div id="conn" title="double-click = full screen · T = light/dark · L = layout · B = tint · , = settings · S / → = next rack · ← = previous rack · R = returns"><div id="dot"></div><span id="connText">connecting…</span></div>
+  </div>
+</header>
+<main id="stage" class="idle">
+  <div id="ratebox" aria-label="Rates"></div>
+  <div id="owner"></div>
+  <span id="main">Waiting for the controller…</span>
+  <span id="value"><canvas id="tviz" aria-hidden="true"></canvas><span id="valueText"></span></span>
+  <div id="targets"></div>
+  <canvas id="eqviz" aria-hidden="true"></canvas>
+  <div id="grbar"><span class="k">GR</span><div class="t"><b></b><s></s></div><span class="n">0.0 dB</span></div>
+  <div id="hint"></div>
+  <div id="meterWrap">
+    <div id="meter"><div id="mfill"></div><div id="mgap"></div><div id="mtarget"></div><div id="mctrl"></div></div>
+    <div id="mtext"><span>Control <b id="mctrlv">–</b></span><span id="mstate"></span><span>Value <b id="mtargetv">–</b></span></div>
+  </div>
+</main>
+<section id="panels">
+  <div id="rackrow"><div id="rackname"></div><div id="rackstrip"></div></div>
+  <div id="pgstrip" class="off"><span data-p="perform">Perform</span><span data-p="detail">Detail</span><span data-p="dynamics">Dynamics</span><span data-p="mix">Mix</span></div>
+  <div id="macros"></div>
+</section>
+<section id="bottom" aria-label="Controller">
+  <div id="overview">
+    <div class="strip" id="trkStrip"></div>
+    <div class="strip" id="retStrip"></div>
+  </div>
+  <div id="pgrid"></div>
+  <div id="legend" aria-label="What the faders do"></div>
+  <div id="map"></div>
+  <div id="chs" aria-label="Channel strips"></div>
+</section>
+<div id="setPanel" role="dialog" aria-label="Settings">
+  <h2>Settings <button class="x" id="setClose" type="button" title="Close · Esc">×</button></h2>
+  <div class="tabs" role="tablist">
+    <button type="button" role="tab" data-tab="knobs">Knobs</button>
+    <button type="button" role="tab" data-tab="racks">Racks</button>
+    <button type="button" role="tab" data-tab="meters">Meters</button>
+    <button type="button" role="tab" data-tab="window">Window</button>
+  </div>
+  <div class="tabpage" data-tab="knobs">
+  <div class="row"><span>Number on the knob</span>
+    <select id="optKnobNum"><option value="pct">0–100</option><option value="live">Macro value (as in Live)</option></select></div>
+  <div class="row"><span>Knob groups in portrait</span>
+    <select id="optQorder"><option value="rows">1–4, 5–8, 9–12, 13–16</option><option value="halves">1–4, 9–12, 5–8, 13–16</option></select></div>
+  <label><input type="checkbox" id="optHl"> Highlight the knob being turned</label>
+  <label><input type="checkbox" id="optPick"> Show pickup on the knob (yellow)</label>
+  <label><input type="checkbox" id="optPmeter"> Pickup bar under the big text</label>
+  <label><input type="checkbox" id="optOwnSq"> Colour square before the track name</label>
+  <label><input type="checkbox" id="optOwnCol"> Track name in the track's colour</label>
+  <label><input type="checkbox" id="optTviz"> Time graphics (LFO, delay, envelope)</label>
+  <label><input type="checkbox" id="optEq"> EQ curve while turning a Colour knob</label>
+  <label><input type="checkbox" id="optRatebox"> Always show the rate macros (top right)</label>
+  <h3>Synth</h3>
+  <label><input type="checkbox" id="optArt"> Picture of the synth</label>
+  <label><input type="checkbox" id="optSkin"> Dark faceplate on the knob groups</label>
+  <label><input type="checkbox" id="optSideline"> Line in the track's colour along the left side of the window</label>
+  <label><input type="checkbox" id="optRole"> Icon for the role after the track name (lead, arp, pad, kick …)</label>
+  <label><input type="checkbox" id="optMidiCh"> MIDI channel after the track name (Ch. 4)</label>
+  <div class="row" id="voiceInfo" style="opacity:0.75"></div>
+  </div>
+  <div class="tabpage" data-tab="racks">
+  <h3>In the viewer</h3>
+  <label><input type="checkbox" id="optKindCol"> Colour for the kind of rack on the rack name (word and edge)</label>
+  <label><input type="checkbox" id="optKindFrame"> Outline round the knobs in the kind-of-rack colour</label>
+  <label><input type="checkbox" id="optEdge"> Edge line under each knob group, in the track's colour</label>
+  <label><input type="checkbox" id="optRackStrip"> Strip with all racks on the track (click = go there)</label>
+  <label><input type="checkbox" id="optNestFrame"> Dashed frame and "nested in" for a rack inside a rack</label>
+  <label><input type="checkbox" id="optPageCol"> Page look: Detail colours softened, Dynamics in one colour</label>
+  <label><input type="checkbox" id="optPageFrame"> Page look: frame and tag on Detail and Dynamics pages</label>
+  <label><input type="checkbox" id="optPageStrip"> Page look: Perform · Detail · Dynamics · Mix strip above the knobs</label>
+  <h3>On the Alias 8</h3>
+  <label><input type="checkbox" id="optRackTap"> Tap the selected track again = its next rack (Track page)</label>
+  <div class="row"><span style="opacity:0.75">S or → = next rack, ← = previous rack, or click the rack name</span></div>
+  </div>
+  <div class="tabpage" data-tab="meters">
+  <h3>Gain reduction (A8 GR devices)</h3>
+  <label><input type="checkbox" id="optGrA"> Meter in the Dynamics / Sidechain group</label>
+  <label><input type="checkbox" id="optGrC"> Strip on the buttons</label>
+  <label><input type="checkbox" id="optGrB"> Bar under the value while turning a Dynamics knob</label>
+  <h3>Buttons</h3>
+  <label><input type="checkbox" id="optMeters"> Level meters</label>
+  <label><input type="checkbox" id="optPeak"> Peak line on the meters</label>
+  <label><input type="checkbox" id="optOv"> Overview of all tracks and returns</label>
+  </div>
+  <div class="tabpage" data-tab="window">
+  <label><input type="checkbox" id="optNotice"> Short messages in the top bar</label>
+  <label><input type="checkbox" id="optTint"> Background in the page colour <span class="key">B</span></label>
+  <div class="row"><span>Layout <span class="key" style="margin-left:4px">L</span></span>
+    <select id="optLayout"><option value="auto">Auto</option><option value="landscape">Landscape</option><option value="portrait">Portrait</option></select></div>
+  </div>
+</div>
+</div>
+<div id="floating">
+  <div>The viewer is floating on top in its own window.</div>
+  <button id="unfloat" class="hbtn" type="button">Bring it back here</button>
+</div>
+
+<script>
+// Page number (from the script) -> name and colour, as on the controller's top row
+var PAGES = {
+  1: ["Perform", "#9aa0a8"],
+  2: ["Track", "#0e8fa3"],
+  3: ["Returns", "#f2c12e"],
+  4: ["Master", "#1f5bd1"],
+  5: ["Mix", "#1e7f43"]
+};
+var IDLE_MS = 4000;          // dim the big text after this long without a knob/fader
+var NOTICE_MS = 2500;        // how long other messages (scrolling, arming, send layer ...) show in the top bar
+var ACTIVE_MS = 1500;        // how long the knob being turned stays highlighted
+
+var pipWin = null;           // the always-on-top window, while it's open
+var el = function (id) { return (pipWin && pipWin.document.getElementById(id)) || document.getElementById(id); };
+function rootProp(name, value) {
+  document.documentElement.style.setProperty(name, value);
+  if (pipWin) pipWin.document.documentElement.style.setProperty(name, value);
+}
+function rootClass(name, on) {
+  document.documentElement.classList.toggle(name, on);
+  if (pipWin) pipWin.document.documentElement.classList.toggle(name, on);
+}
+// Names as shown: a return's "A-" letter in front of a ! or # mark goes, and so does the mark itself
+var stripLetter = function (n) { return String(n || "").replace(/^[A-Z]{1,2}-(?=[!#])/, "").replace(/^[!#]+(?=\S)/, "").replace(/\s*\*\s*$/, ""); };
+var stripMarks = function (t) { return String(t || "").replace(/\b[A-Z]{1,2}-(?=[!#])/g, "").replace(/(^|[\s>(])[!#]+(?=\w)/g, "$1").replace(/(\w)\s*\*(?=\s|$|\))/g, "$1"); };
+
+// ---------- the track name above the big text, with the tracks' Live colours ----------
+// "Lead" or "Lead > Echo" (a send): each name can get a small square in its colour and/or be written in it
+var trackColors = {};
+function learnColors(st) {
+  (st.tracks || []).concat(st.returns || [], st.cols || []).forEach(function (t) {
+    if (t && t.name && t.rgb) trackColors[stripLetter(t.name)] = t.rgb;
+  });
+  if (st.macros && st.macros.owner === "Master") trackColors.Master = trackColors.Master || "";
+}
+var ownerText = "";
+function setOwner(text) {
+  ownerText = String(text || "");
+  var box = el("owner");
+  box.textContent = "";
+  if (!ownerText) return;
+  ownerText.split(/\s+>\s+/).forEach(function (part, i) {
+    if (i) box.appendChild(document.createTextNode(" › "));
+    var name = stripLetter(part), rgb = trackColors[name];
+    var span = document.createElement("span");
+    span.className = "on";
+    if (rgb) {
+      span.style.setProperty("--tc", rgb);
+      var sq = document.createElement("i"); sq.className = "sw"; span.appendChild(sq);
+      span.classList.add("hc");
+    }
+    span.appendChild(document.createTextNode(name));
+    box.appendChild(span);
+  });
+  if (typeof renderCh === "function") renderCh();
+}
+
+// ---------- messages ----------
+// "Alias 8: Bass - Cutoff 64 %"                -> owner "Bass", main "Cutoff", value "64 %"
+// "Alias 8: Bass - Cutoff - turn up to 72 %"   -> plus hint "↑ turn up to 72 %"
+function parse(text) {
+  var t = stripMarks(String(text || "").replace(/^Alias 8[^:]*:\s*/, ""));
+  var out = { owner: "", main: t, value: "", hint: "" };
+  var m = t.match(/^(.*?) - turn (up|down) to (.*)$/);
+  if (m) { out.hint = (m[2] === "up" ? "↑ " : "↓ ") + "turn " + m[2] + " to " + m[3]; t = m[1]; out.main = t; }
+  var dash = t.indexOf(" - ");
+  if (dash > 0) { out.owner = t.slice(0, dash); t = t.slice(dash + 3); out.main = t; }
+  if (!m) {
+    var v = t.match(/^(.*\S)\s+(-?[\d.,]+\s*(?:%|dB|Hz|kHz|ms|s|BPM|[LRC])?|\d+\s*\/\s*\d+\s*(?:[DT.])?|\d+\s*(?:st|nd|rd|th)|\d+\s*bars?|-?inf\s*dB|C|\d+[LR]|Off|On)$/i);
+    if (v) { out.main = v[1]; out.value = v[2]; }
+  }
+  return out;
+}
+
+var idleTimer = null, noticeTimer = null;
+function show(msg) {
+  if (msg.page && PAGES[msg.page]) setPage(msg.page);
+  // only knobs and faders change the big text; everything else (scrolling, arming, the send layer,
+  // selecting) shows briefly in the top bar and leaves the last knob/fader on screen
+  if (typeof msg.control !== "number") { notice(msg.text); return; }
+  var p = parse(msg.text);
+  if (msg.macro && msg.macro[1]) lastKnob[grKey(msg.macro[1])] = { n: msg.macro[0], main: p.main };   // per track
+  setOwner(p.owner);
+  el("main").textContent = p.main;
+  el("valueText").textContent = p.value;
+  el("targets").textContent = msg.targets || "";
+  timeViz(p.main, p.value);
+  el("hint").textContent = p.hint;
+  meter(msg);
+  activeKnob(msg.macro, msg);
+  var mn = msg.macro && msg.macro[0], lm = lastMacros;
+  if (mn && lm && lm.items && grKey(msg.macro[1]) === grKey(lm.owner) && eqIsColour(mn)) {
+    var mit = lm.items[mn - 1];                    // the turned macro's new value, before the next state arrives
+    if (mit && typeof msg.target === "number" && !msg.pickup) { mit.v = msg.target; mit.text = p.value || mit.text; }
+    eqShow(mn, msg.targets);
+  } else eqHide();
+  var cr = compRange();
+  grFocus = msg.macro && msg.macro[0] >= cr[0] && msg.macro[0] <= cr[1] && !(msg.pickup) ? msg.macro[1] : null;   // a compressor macro
+  grFocusT = performance.now();
+  var stage = el("stage");
+  stage.classList.remove("idle");
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(function () { stage.classList.add("idle"); }, IDLE_MS);
+}
+function notice(text) {
+  var n = el("notice");
+  n.textContent = stripMarks(String(text || "").replace(/^Alias 8[^:]*:\s*/, ""));
+  n.classList.add("show");
+  clearTimeout(noticeTimer);
+  noticeTimer = setTimeout(function () { n.classList.remove("show"); }, NOTICE_MS);
+}
+
+// ---------- time graphics ----------
+// A small dot-matrix picture to the left of a time value, moving at the real time:
+//   LFO rate (low Hz, or a synced rate like 1/8 on a "Rate"/"LFO"/"Speed" macro): a sine of 16 dots with a
+//     bright dot running along it once per cycle, short tail behind; too fast to follow = the wave shimmers.
+//   Delay time (ms/s or 1/16 on a "Delay"/"Time"/"Echo" macro): a hit and three echoes lighting up in turn,
+//     each quieter, then a rest.
+//   Attack / Decay / Release ...: a ramp of dots filling up (attack) or running down (the others) in that time.
+//   Any other time: one dot blinking once per period.
+// Synced values (1/16, 1/8D, 1/4T, 16th, 2 bars, and a bare number like 1.5 or 8 on a "Rate" macro = bars)
+// use Live's tempo, which the script sends.
+var tempo = 120, tv = null, tvRaf = null;
+var RE_LFO = /rate|lfo|speed|tremolo|vibrato|chorus|phaser|flang|wobble/i;
+var RE_DELAY = /delay|echo|time|pre-?d|repeat|beat|ping/i;
+var RE_ENV = /attack|decay|release|hold|fade|glide|porta|env|smooth|lookahead/i;
+function timeOf(name, value) {
+  var v = String(value || "").trim().replace(/−/g, "-"), n = String(name || ""), m, sec = 0, synced = false;
+  if ((m = v.match(/^([\d.]+)\s*Hz$/i))) {                              // a frequency: only low ones are rates
+    var hz = parseFloat(m[1]);
+    // only on a macro named as a rate/LFO: a frequency on anything else (EQ, high-pass ...) is not a time
+    if (!(hz > 0) || hz > 40 || !RE_LFO.test(n) || /pass|cut|eq|shelf|band|notch/i.test(n)) return null;
+    return { kind: "lfo", sec: 1 / hz };
+  }
+  if ((m = v.match(/^([\d.]+)\s*ms$/i))) sec = parseFloat(m[1]) / 1000;
+  else if ((m = v.match(/^([\d.]+)\s*s(ec)?$/i))) sec = parseFloat(m[1]);
+  else if ((m = v.match(/^(\d+)\s*\/\s*(\d+)\s*(d|t|\.|dotted|triplet)?$/i))) {     // 1/16, 1/8D, 1/4T
+    var beats = 4 * parseInt(m[1], 10) / parseInt(m[2], 10), x = (m[3] || "").toLowerCase();
+    if (x === "d" || x === "." || x === "dotted") beats *= 1.5;
+    if (x === "t" || x === "triplet") beats *= 2 / 3;
+    sec = beats * 60 / tempo; synced = true;
+  } else if ((m = v.match(/^(\d+)\s*(st|nd|rd|th)$/i))) { sec = (4 / parseInt(m[1], 10)) * 60 / tempo; synced = true; }
+  else if ((m = v.match(/^(\d+)\s*bars?$/i))) { sec = parseInt(m[1], 10) * 4 * 60 / tempo; synced = true; }
+  else if ((m = v.match(/^(\d+(?:\.\d+)?)$/)) && /rate/i.test(n)) {       // a synced rate without a unit: Live shows
+    sec = parseFloat(m[1]) * 4 * 60 / tempo; synced = true;                // 8, 4, 2, 1.5, 1 (bars), then 3/4 ... 1/64
+  }
+  else return null;
+  if (!(sec > 0)) return null;
+  var kind = RE_ENV.test(n) ? "env" : RE_LFO.test(n) ? "lfo" : RE_DELAY.test(n) ? "delay" : synced ? "lfo" : "pulse";
+  return { kind: kind, sec: sec, rise: /attack/i.test(n) };
+}
+function timeViz(name, value) {
+  var info = timeOf(name, value);
+  el("tviz").classList.toggle("show", !!info);
+  if (info) info.t0 = tv && tv.kind === info.kind ? tv.t0 : performance.now();   // keep running while you turn
+  if (info && tv && tv.kind === "env" && info.kind === "env" && tv.rise === info.rise) info.envU = tv.envU;   // the slope swings from where it was
+  tv = info;
+  if (tv && !tvRaf) tvRaf = requestAnimationFrame(tvFrame);
+}
+function tvFrame(now) {
+  tvRaf = null;
+  var c = el("tviz");
+  if (!tv || !c.classList.contains("show")) return;
+  if (now - (tvFrame.last || 0) < FRAME_MS) { tvRaf = requestAnimationFrame(tvFrame); return; }
+  tvFrame.last = now;
+  var view = c.ownerDocument.defaultView || window, dpr = view.devicePixelRatio || 1;
+  var w = c.clientWidth, h = c.clientHeight;
+  if (w && h) {
+    if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+    drawTime(c.getContext("2d"), w, h, dpr, (now - tv.t0) / 1000, tv);
+  }
+  tvRaf = requestAnimationFrame(tvFrame);
+}
+// Theme colours for the canvases, read from the page at most twice a second (reading styles every frame
+// forces the browser to recalculate the whole page and made everything else lag)
+var inkCache = null, inkT = 0;
+function inkColors() {
+  var now = performance.now();
+  if (!inkCache || now - inkT > 500) {
+    var ink = getComputedStyle(el("app")).getPropertyValue("--text").trim() || "#ffffff";
+    var acc = getComputedStyle(document.documentElement).getPropertyValue("--pc").trim() || ink;
+    inkCache = [ink, acc]; inkT = now;
+  }
+  return inkCache;
+}
+var FRAME_MS = 33;                                // time graphics at ~30 frames a second is plenty
+function drawTime(g, w, h, dpr, t, info) {
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, w, h);
+  var col = inkColors(), ink = col[0], acc = col[1];
+  var P = info.sec, r = Math.max(1.5, h * 0.085);
+  function dot(x, y, rad, a, col) {
+    g.globalAlpha = Math.max(0, Math.min(1, a)); g.fillStyle = col || ink;
+    g.beginPath(); g.arc(x, y, rad, 0, 6.2832); g.fill();
+  }
+  if (info.kind === "lfo") {
+    // Slow rates: one cycle, the dot runs along it once per cycle. Fast rates (shorter than a quarter
+    // second): several cycles drawn (more = faster) and the dot sweeps all of them in about half a second,
+    // so it stays readable instead of flickering (the faster the rate, the more cycles and the faster the sweep).
+    var cycles = P >= 0.25 ? 1 : Math.min(4, Math.max(2, Math.round(0.5 / P)));
+    var amp = h / 2 - r * 1.6, mid = h / 2, x0 = r * 1.6, xw = w - r * 3.2;
+    var ph = (t / (P * cycles)) % 1;                 // where the bright dot is, 0-1 across the graphic
+    // the wave as a thin line, with a bright stretch and the coloured dot sweeping along it
+    {
+      var yAt = function (u) { return mid - amp * Math.sin(6.2832 * cycles * u); };
+      g.lineWidth = Math.max(1.2, r * 0.9); g.lineCap = "round"; g.lineJoin = "round";
+      g.globalAlpha = 0.28; g.strokeStyle = ink; g.beginPath();
+      for (var j = 0; j <= 96; j++) { var u = j / 96; if (j) g.lineTo(x0 + xw * u, yAt(u)); else g.moveTo(x0, yAt(0)); }
+      g.stroke();
+      var span = 0.18, u0 = Math.max(0, ph - span);
+      g.globalAlpha = 0.9; g.strokeStyle = ink; g.beginPath();
+      for (var q = 0; q <= 24; q++) { var uu = u0 + (ph - u0) * q / 24; if (q) g.lineTo(x0 + xw * uu, yAt(uu)); else g.moveTo(x0 + xw * uu, yAt(uu)); }
+      g.stroke();
+      dot(x0 + xw * ph, yAt(ph), r * 1.6, 1, acc);
+    }
+  } else if (info.kind === "delay") {
+    var lv = [1, 0.7, 0.45, 0.25], cyc = 4 * P + Math.max(P, 0.5), tc = t % cyc;
+    for (var k = 0; k < 4; k++) {
+      var x2 = w * (0.12 + 0.253 * k), dt = tc - k * P, a = 0.16;
+      if (dt >= 0) a = Math.max(a, lv[k] * Math.exp(-dt / Math.max(0.06, Math.min(0.25, P * 0.6))));
+      var hit = dt >= 0 && dt < 0.09;
+      dot(x2, h / 2, r * (1.3 + (hit ? 0.9 * lv[k] : 0)), a, k === 0 && hit ? acc : ink);
+    }
+  } else if (info.kind === "env") {
+    // Attack / decay / release ...: no animation at the real speed (too fast to read). A still envelope whose
+    // slope shows the time: nearly vertical = short, long and gentle = long (log scale, 0.5 ms .. 10 s). When the
+    // value changes, the slope swings smoothly to the new angle.
+    var goal = Math.max(0, Math.min(1, (Math.log(P) - Math.log(0.0005)) / (Math.log(10) - Math.log(0.0005))));
+    if (typeof info.envU !== "number") info.envU = goal;
+    info.envU += (goal - info.envU) * 0.22;                       // ease towards the new angle
+    var pad = r * 1.6, x0e = pad, xw2 = w - pad * 2, yTop = pad, yBot = h - pad;
+    var xk = x0e + xw2 * (0.04 + 0.92 * info.envU);                // where the slope ends
+    var yS = info.rise ? yBot : yTop, yE = info.rise ? yTop : yBot;   // attack rises, the others fall
+    g.lineCap = "round"; g.lineJoin = "round";
+    g.globalAlpha = 0.14; g.fillStyle = ink; g.beginPath();        // the area under the envelope
+    g.moveTo(x0e, yBot); g.lineTo(x0e, yS); g.lineTo(xk, yE); g.lineTo(x0e + xw2, yE); g.lineTo(x0e + xw2, yBot); g.closePath(); g.fill();
+    g.globalAlpha = 0.3; g.strokeStyle = ink; g.lineWidth = Math.max(1.2, r * 0.9);   // the flat part after it
+    g.beginPath(); g.moveTo(xk, yE); g.lineTo(x0e + xw2, yE); g.stroke();
+    g.globalAlpha = 0.95; g.lineWidth = Math.max(1.6, r * 1.2);    // the slope itself, bright
+    g.beginPath(); g.moveTo(x0e, yS); g.lineTo(xk, yE); g.stroke();
+    dot(xk, yE, r * 1.5, 1, acc);                                  // where it gets there
+  } else {
+    var ph = (t % P) / P, a2 = Math.max(0.18, Math.exp(-ph * P / Math.max(0.05, Math.min(0.2, P * 0.5))));
+    dot(h * 0.5, h / 2, r * 2.4, a2, acc);
+  }
+  g.globalAlpha = 1;
+}
+
+// ---------- Colour EQ curve ----------
+// Turning a knob in the Colour group (a group named "Colour" / "Color", settings.py COLOUR_EQ_WORDS) shows one EQ
+// curve that all the group's macros feed into: each macro is read as a band by its name (Low, Presence, Air,
+// High Cut, Tilt, Drive ...; COLOUR_EQ in settings.py names others) and its value (a dB value is used as it is,
+// a Hz value as the frequency, otherwise the knob position). The curve eases to its new shape while you turn;
+// it goes away when another knob or a fader moves or the track changes.
+var EQ_PLATE = "#14161b";                                              // the curve's background (as the knob faceplate)
+var EQ_WORDS = ["colour", "color"], EQ_MAP = {}, EQ_RANGE = 15;        // ±dB shown
+var EQ_SLOT_F = [150, 700, 2500, 8000];                                 // an unknown macro: a soft bell by its place
+var EQ_N = 160, eqCur = null, eqTgt = null, eqBands = [], eqOn = false, eqActive = -1, eqRaf = null, eqCol = "#2F6EA5";
+var eqDev = null, eqHot = {}, eqHotName = "";          // the EQ Eight the script found (m.eq), its bands the turned macro moves
+var EQ_TYPES = [                                                        // [type, test on the macro's name]
+  ["lowcut", /\b(low|lo)\s*-?cut|\bhpf?\b|(high|hi)\s*-?pass|rumble|clean\s*-?up/],
+  ["highcut", /\b(high|hi)\s*-?cut|\blpf?\b|(low|lo)\s*-?pass|damp|dark|soften/],
+  ["tilt", /tilt|\btone\b|\bcolou?r\b|\btint\b/],
+  ["air", /\bair\b|sheen|sparkle|shine|silk|brillian/],
+  ["highmid", /(high|hi)\s*-?mids?\b/],
+  ["presence", /presen|bite|crisp|edge|clarity|defin|click|snap/],
+  ["high", /\b(high|hi|treble|top|bright)/],
+  ["lowmid", /mud|box|scoop|(low|lo)\s*-?mids?\b/],
+  ["mid", /\bmids?\b|honk|nasal|focus/],
+  ["sub", /\bsub/],
+  ["warmth", /warm/],
+  ["low", /\b(low|lo|bass|body|weight|fat|thump|bottom|boom|thick)/],
+  ["harmonics", /driv|satur|\bsat\b|dist|crush|fuzz|heat|tape|grit|dirt|bit|fold|tube|\bamp\b|excit|harmon|enhanc|warp/],
+  ["notch", /phas|flang|comb|notch/]
+];
+var EQ_FREQ = { lowcut: 0, highcut: 0, tilt: 10000, air: 12000, highmid: 2000, presence: 3500, high: 6000, lowmid: 350, mid: 1000,
+                sub: 60, warmth: 200, low: 120, harmonics: 2500, notch: 900, bell: 1000 };
+function eqDb(text) {                                  // "4.5 dB" -> 4.5, "-inf dB" -> -24, else null
+  var m = String(text || "").replace(/−/g, "-").match(/^\s*([-+]?(?:inf|\d+(?:[.,]\d+)?))\s*dB\s*$/i);
+  if (!m) return null;
+  return /inf/i.test(m[1]) ? -24 : parseFloat(m[1].replace(",", "."));
+}
+function eqHz(text) {                                  // "6.20 kHz" -> 6200, "80.0 Hz" -> 80, else null
+  var m = String(text || "").match(/^\s*(\d+(?:[.,]\d+)?)\s*(k?)Hz\s*$/i);
+  return m ? parseFloat(m[1].replace(",", ".")) * (m[2] ? 1000 : 1) : null;
+}
+function eqTypeOf(name) {                              // [type, frequency or 0]
+  var n = String(name || "").trim().toLowerCase(), own = EQ_MAP[n];
+  if (own) {                                           // settings.py COLOUR_EQ: "presence", "mid 800", "bell 4k", "off"
+    var m = String(own).toLowerCase().match(/^\s*([a-z ]*?)\s*(?:(\d+(?:\.\d+)?)\s*(k)?\s*(?:hz)?)?\s*$/);
+    if (m) {
+      var t = m[1].replace(/\s+/g, "");
+      t = { lowcut: "lowcut", highcut: "highcut", hp: "lowcut", lp: "highcut", lowmid: "lowmid", highmid: "highmid", drive: "harmonics" }[t] || t;
+      if (t === "off" || EQ_FREQ.hasOwnProperty(t)) return [t, m[2] ? parseFloat(m[2]) * (m[3] ? 1000 : 1) : 0];
+    }
+  }
+  if (/freq|pivot|\bq\b|width|reso/.test(n)) return ["off", 0];   // a band's frequency or Q, not a band of its own
+  for (var i = 0; i < EQ_TYPES.length; i++) if (EQ_TYPES[i][1].test(n)) return [EQ_TYPES[i][0], 0];
+  return ["", 0];
+}
+function eqBand(it, slot) {                            // one macro -> one band, or null (empty / off / no effect)
+  if (!it || typeof it.v !== "number") return null;
+  var tf = eqTypeOf(it.name), type = tf[0], f = tf[1], v = Math.max(0, Math.min(1, it.v));
+  if (type === "off") return null;
+  if (!type) { type = "bell"; f = EQ_SLOT_F[slot]; }
+  var db = eqDb(it.text), hz = eqHz(it.text), b = { type: type, slot: slot, name: it.name || "" };
+  if (type === "lowcut") { b.f = hz || f || 20 * Math.pow(50, v); return b; }            // clockwise = more cut
+  if (type === "highcut") { b.f = hz || f || 20000 / Math.pow(25, v); return b; }
+  b.f = f || EQ_FREQ[type];
+  if (type === "tilt") b.g = db !== null ? db : (v - 0.5) * 12;
+  else if (type === "harmonics") b.g = v * 6;
+  else if (type === "notch") b.g = v * 14;
+  else if (type === "bell") b.g = db !== null ? db : v * 6;
+  else b.g = db !== null ? db : v * 12;
+  if (type === "warmth") b.g = db !== null ? db : v * 8;
+  return b;
+}
+// ---- the real EQ Eight (m.eq from the script): each band as a biquad (RBJ cookbook, 48 kHz), like Live draws it
+var EQ8_TYPES = ["lc48", "lc12", "ls", "bell", "notch", "hs", "hc12", "hc48"];   // EQ Eight's Filter Type order
+function eq8Type(b) {
+  var t = String(b.tname || "").toLowerCase();
+  if (t) {
+    if (/low\s*cut|high\s*pass/.test(t)) return /48/.test(t) ? "lc48" : "lc12";
+    if (/high\s*cut|low\s*pass/.test(t)) return /48/.test(t) ? "hc48" : "hc12";
+    if (/low\s*shelf/.test(t)) return "ls";
+    if (/high\s*shelf/.test(t)) return "hs";
+    if (/notch/.test(t)) return "notch";
+    if (/bell|peak/.test(t)) return "bell";
+  }
+  return EQ8_TYPES[b.type] || "bell";
+}
+function eqNum(pair, unit) {                           // [value, "text"] -> a number from the text, else the value
+  if (!pair) return null;
+  var t = String(pair[1] || ""), m;
+  if (unit === "hz" && (m = t.match(/(\d+(?:[.,]\d+)?)\s*(k?)Hz/i))) return parseFloat(m[1].replace(",", ".")) * (m[2] ? 1000 : 1);
+  if (unit === "db" && (m = t.replace(/−/g, "-").match(/([-+]?\d+(?:[.,]\d+)?)\s*dB/i))) return parseFloat(m[1].replace(",", "."));
+  if (unit === "pct" && (m = t.match(/(\d+(?:[.,]\d+)?)\s*%/))) return parseFloat(m[1].replace(",", ".")) / 100;
+  if (unit === "q" && (m = t.match(/^\s*(\d+(?:[.,]\d+)?)\s*$/))) return parseFloat(m[1].replace(",", "."));
+  return typeof pair[0] === "number" ? pair[0] : null;
+}
+function eqDevBands(eq) {
+  var scale = eqNum(eq.scale, "pct");
+  if (scale === null || !(scale >= 0) || scale > 2) scale = 1;
+  var out = [];
+  (eq.bands || []).forEach(function (b, i) {
+    if (!b || !b.on || eq.on === false) return;
+    var f = eqNum(b.f, "hz"), g = eqNum(b.g, "db"), q = eqNum(b.q, "q");
+    if (!(f > 0)) return;
+    out.push({ bq: eq8Type(b), slot: i + 1, f: Math.max(10, Math.min(22000, f)), g: (g || 0) * scale, q: q > 0 ? q : 0.71 });
+  });
+  return out;
+}
+function bqCoef(t, f0, g, q) {                         // [b0, b1, b2, a0, a1, a2]
+  var w = 2 * Math.PI * f0 / 48000, c = Math.cos(w), al = Math.sin(w) / (2 * q), A = Math.pow(10, g / 40), r = 2 * Math.sqrt(A) * al;
+  switch (t) {
+    case "hp": return [(1 + c) / 2, -(1 + c), (1 + c) / 2, 1 + al, -2 * c, 1 - al];
+    case "lp": return [(1 - c) / 2, 1 - c, (1 - c) / 2, 1 + al, -2 * c, 1 - al];
+    case "notch": return [1, -2 * c, 1, 1 + al, -2 * c, 1 - al];
+    case "ls": return [A * ((A + 1) - (A - 1) * c + r), 2 * A * ((A - 1) - (A + 1) * c), A * ((A + 1) - (A - 1) * c - r),
+                       (A + 1) + (A - 1) * c + r, -2 * ((A - 1) + (A + 1) * c), (A + 1) + (A - 1) * c - r];
+    case "hs": return [A * ((A + 1) + (A - 1) * c + r), -2 * A * ((A - 1) + (A + 1) * c), A * ((A + 1) + (A - 1) * c - r),
+                       (A + 1) - (A - 1) * c + r, 2 * ((A - 1) - (A + 1) * c), (A + 1) - (A - 1) * c - r];
+    default: return [1 + al * A, -2 * c, 1 - al * A, 1 + al / A, -2 * c, 1 - al / A];   // bell
+  }
+}
+function bqDb(k, f) {                                  // a biquad's level in dB at f
+  var w = 2 * Math.PI * Math.min(f, 23900) / 48000, c1 = Math.cos(w), c2 = Math.cos(2 * w);
+  var num = k[0] * k[0] + k[1] * k[1] + k[2] * k[2] + 2 * (k[0] * k[1] + k[1] * k[2]) * c1 + 2 * k[0] * k[2] * c2;
+  var den = k[3] * k[3] + k[4] * k[4] + k[5] * k[5] + 2 * (k[3] * k[4] + k[4] * k[5]) * c1 + 2 * k[3] * k[5] * c2;
+  return 10 * Math.log10(Math.max(1e-12, num) / Math.max(1e-12, den));
+}
+var BW4 = [0.5098, 0.6013, 0.9000, 2.5629];            // an 8th-order (48 dB/oct) Butterworth as four biquads
+function eqDevAt(b, f) {
+  if (!b.k) {                                          // the coefficients, worked out once per band
+    var t = b.bq;
+    if (t === "lc12" || t === "hc12") b.k = [bqCoef(t === "lc12" ? "hp" : "lp", b.f, 0, b.q)];
+    else if (t === "lc48" || t === "hc48") b.k = BW4.map(function (bq, i) { return bqCoef(t === "lc48" ? "hp" : "lp", b.f, 0, i === 3 ? bq * b.q / 0.7071 : bq); });
+    else b.k = [bqCoef(t, b.f, b.g, b.q)];
+  }
+  var s = 0;
+  for (var i = 0; i < b.k.length; i++) s += bqDb(b.k[i], f);
+  return s;
+}
+function eqAt(b, f) {                                  // dB of one band at frequency f
+  if (b.bq) return eqDevAt(b, f);
+  var o = Math.log2(f / b.f);
+  switch (b.type) {
+    case "lowcut": return -10 * Math.log10(1 + Math.pow(b.f / f, 4));
+    case "highcut": return -10 * Math.log10(1 + Math.pow(f / b.f, 4));
+    case "low": case "sub": return b.g / (1 + Math.pow(f / b.f, 2));
+    case "high": case "air": return b.g / (1 + Math.pow(b.f / f, 2));
+    case "tilt": return b.g * Math.tanh(Math.log2(f / 1000) / 2.5);
+    case "warmth": return b.g / (1 + Math.pow(f / b.f, 2)) - 0.4 * b.g / (1 + Math.pow(8000 / f, 2));
+    case "harmonics": return b.g * Math.exp(-0.5 * o * o / 1.69);
+    case "notch": return -b.g * (Math.exp(-0.5 * o * o / 0.04) + Math.exp(-0.5 * Math.pow(Math.log2(f / (b.f * 2.6)), 2) / 0.04));
+    case "presence": return b.g * Math.exp(-0.5 * o * o / 0.49);
+    default: return b.g * Math.exp(-0.5 * o * o / 0.36);                // lowmid, mid, highmid, bell
+  }
+}
+function eqFreq(i) { return 20 * Math.pow(1000, i / (EQ_N - 1)); }       // 20 Hz .. 20 kHz
+function eqGroup() {                                   // which knob group is the Colour group (0-3), or -1
+  for (var g = 0; g < GROUPS.length; g++) {
+    var nm = String(GROUPS[g][1] || "").toLowerCase();
+    if (EQ_WORDS.some(function (w) { return w && nm.indexOf(w) >= 0; })) return g;
+  }
+  return -1;
+}
+function eqUpdate() {                                  // the target curve from the Colour group's macros
+  var gi = eqGroup(), items = (lastMacros && lastMacros.items) || [];
+  eqBands = [];
+  if (gi < 0) return false;
+  eqDev = lastMacros && lastMacros.eq && lastMacros.eq.bands ? lastMacros.eq : null;
+  if (eqDev) eqBands = eqDevBands(eqDev);              // the real EQ Eight
+  else for (var s = 0; s < 4; s++) { var b = eqBand(items[gi * 4 + s], s); if (b) eqBands.push(b); }
+  eqTgt = [];
+  for (var i = 0; i < EQ_N; i++) {
+    var f = eqFreq(i), sum = 0;
+    eqBands.forEach(function (b) { sum += eqAt(b, f); });
+    eqTgt.push(sum);
+  }
+  if (!eqCur) eqCur = eqTgt.map(function () { return 0; });
+  var gq = knobs[gi * 4] ? knobs[gi * 4].closest(".grp") : null;
+  if (gq) eqCol = getComputedStyle(gq).getPropertyValue("--gb").trim() || eqCol;
+  return eqBands.length > 0 || !!eqDev;
+}
+function eqShow(n, targets) {                          // a knob in the Colour group was turned (macro n, 1-16)
+  if (!opts.eq) return eqHide();
+  var gi = eqGroup();
+  if (gi < 0 || n < gi * 4 + 1 || n > gi * 4 + 4 || !eqUpdate()) return eqHide();
+  eqActive = n - 1 - gi * 4;
+  var it = lastMacros && lastMacros.items && lastMacros.items[n - 1];
+  eqHotName = it ? it.name || "" : "";
+  eqHot = {};                                          // which EQ Eight bands this macro moves ("EQ Eight: 5 Gain A, 6 Gain A")
+  if (eqDev) String(targets || "").split(" \u00b7 ").forEach(function (part) {
+    var c = part.indexOf(": ");
+    if (c < 0 || part.slice(0, c) !== eqDev.name) return;
+    part.slice(c + 2).replace(/(?:^|,\s*)(\d)\s+(?:Frequency|Gain|Resonance|Filter)/g, function (_, d) { eqHot[+d] = true; return _; });
+  });
+  if (!eqOn) { eqOn = true; el("eqviz").classList.add("show"); placeEq(); }
+  if (!eqRaf) eqRaf = requestAnimationFrame(eqFrame);
+}
+function eqHide() {
+  if (!eqOn) return;
+  eqOn = false; eqActive = -1;
+  var c = el("eqviz");
+  c.classList.remove("show");
+  el("stage").classList.remove("eqside");
+}
+function eqIsColour(n) { var gi = eqGroup(); return gi >= 0 && n >= gi * 4 + 1 && n <= gi * 4 + 4; }
+// Where the curve goes: in the free space under the big text if there is room (portrait), otherwise to the right of it
+// (the big text then ends with "…" before the curve).
+function placeEq() {
+  if (!eqOn) return;
+  var c = el("eqviz"), stage = el("stage"), mw = el("meterWrap"), rr = el("rackrow"), panels = el("panels");
+  var sr = stage.getBoundingClientRect(), mr = mw.getBoundingClientRect();
+  var below = (panels && panels.classList.contains("show") && rr && rr.offsetParent ? rr.getBoundingClientRect().top : window.innerHeight) - mr.bottom;
+  var padL = parseFloat(getComputedStyle(stage).paddingLeft) || 0, w = sr.width - padL * 2;
+  if (below >= 120) {
+    var h = Math.min(below - 24, w * 0.42, 340);
+    stage.classList.remove("eqside");
+    c.style.left = padL + "px"; c.style.width = w + "px";
+    c.style.top = (mr.bottom - sr.top + Math.max(10, (below - h) / 2)) + "px"; c.style.height = h + "px";
+  } else {
+    var top = el("main").getBoundingClientRect().top - sr.top, bot = mr.top - sr.top - 8;
+    var rb = el("ratebox").getBoundingClientRect();
+    if (rb.height && rb.bottom - sr.top > top) top = rb.bottom - sr.top + 6;
+    var ww = Math.min(w * 0.44, (bot - top) * 3.2);
+    stage.classList.add("eqside");
+    c.style.left = (sr.width - padL - ww) + "px"; c.style.width = ww + "px";
+    c.style.top = top + "px"; c.style.height = Math.max(60, bot - top) + "px";
+  }
+  eqCur && (eqFrame.last = 0);
+  if (!eqRaf) eqRaf = requestAnimationFrame(eqFrame);
+}
+window.addEventListener("resize", function () { if (eqOn) requestAnimationFrame(placeEq); });
+function eqFrame(now) {
+  eqRaf = null;
+  var c = el("eqviz");
+  if (!eqOn || !eqTgt) return;
+  if (now - (eqFrame.last || 0) < FRAME_MS) { eqRaf = requestAnimationFrame(eqFrame); return; }
+  eqFrame.last = now;
+  var moving = false;
+  for (var i = 0; i < EQ_N; i++) {
+    var d = eqTgt[i] - eqCur[i];
+    if (Math.abs(d) > 0.02) { eqCur[i] += d * 0.3; moving = true; } else eqCur[i] = eqTgt[i];
+  }
+  var view = c.ownerDocument.defaultView || window, dpr = view.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+  if (w && h) {
+    if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+    drawEq(c.getContext("2d"), w, h, dpr);
+  }
+  if (moving) eqRaf = requestAnimationFrame(eqFrame);
+}
+function drawEq(g, w, h, dpr) {
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, w, h);
+  var ink = inkColors()[0], fs = Math.max(10, Math.min(15, h * 0.07)), pad = fs * 0.6;
+  var x0 = pad, xw = w - pad * 2, yTop = fs * 1.9, yBot = h - fs * 1.7, ym = (yTop + yBot) / 2, yr = (yBot - yTop) / 2;
+  var X = function (f) { return x0 + xw * Math.log(f / 20) / Math.log(1000); };
+  var Y = function (db) { return ym - yr * Math.max(-1.08, Math.min(1.08, db / EQ_RANGE)); };
+  g.globalAlpha = 1; g.fillStyle = EQ_PLATE;                            // the plate: opaque, so the picture behind doesn't show through
+  g.beginPath(); if (g.roundRect) g.roundRect(0, 0, w, h, 10); else g.rect(0, 0, w, h); g.fill();
+  g.globalAlpha = 0.08; g.strokeStyle = ink; g.lineWidth = 1; g.stroke();
+  g.fillStyle = ink;
+  g.font = "600 " + fs + "px system-ui, -apple-system, sans-serif"; g.textBaseline = "middle";
+  [50, 100, 200, 500, 1000, 2000, 5000, 10000].forEach(function (f) {    // frequency grid
+    var big = f === 100 || f === 1000 || f === 10000;
+    g.globalAlpha = big ? 0.16 : 0.07; g.fillRect(Math.round(X(f)), yTop, 1, yBot - yTop);
+    if (big) { g.globalAlpha = 0.45; g.textAlign = "center"; g.fillText(f >= 1000 ? f / 1000 + "k" : String(f), X(f), h - fs * 0.85); }
+  });
+  [-12, -6, 6, 12].forEach(function (db) { g.globalAlpha = 0.06; g.fillRect(x0, Math.round(Y(db)), xw, 1); });
+  g.globalAlpha = 0.3; g.fillRect(x0, Math.round(ym), xw, 1);            // 0 dB
+  g.globalAlpha = 0.45; g.textAlign = "left"; g.fillText("+" + EQ_RANGE, x0, yTop - fs * 0.7);
+  g.textAlign = "right"; g.globalAlpha = 0.55; g.fillStyle = eqCol;
+  g.font = "800 " + fs + "px system-ui, -apple-system, sans-serif";
+  var gi = eqGroup();
+  g.fillText((eqDev ? String(eqDev.name || "EQ Eight") : (gi >= 0 ? GROUPS[gi][1] + " " : "") + "EQ").toUpperCase(), x0 + xw, yTop - fs * 0.7);
+  var pts = eqCur.map(function (db, i) { return [X(eqFreq(i)), Y(db)]; });
+  g.save(); g.beginPath(); g.rect(x0, yTop - fs * 0.5, xw, yBot - yTop + fs); g.clip();
+  g.globalAlpha = 0.28; g.fillStyle = eqCol; g.beginPath();              // the area between 0 dB and the curve
+  g.moveTo(pts[0][0], ym); pts.forEach(function (p) { g.lineTo(p[0], p[1]); }); g.lineTo(pts[EQ_N - 1][0], ym); g.closePath(); g.fill();
+  var rgb = hexRgb(eqCol), lite = rgb ? "rgb(" + rgb.map(function (v) { return Math.round(v + (255 - v) * 0.45); }).join(",") + ")" : ink;
+  var isOn = function (b) { return eqDev ? !!eqHot[b.slot] : b.slot === eqActive; };
+  var act = eqBands.filter(isOn);
+  if (act.length) {                                                       // the knob being turned: its own share, dashed
+    g.globalAlpha = 0.6; g.strokeStyle = ink; g.lineWidth = 1.5; g.setLineDash([4, 4]); g.beginPath();
+    for (var i = 0; i < EQ_N; i++) {
+      var f = eqFreq(i), sum = 0;
+      act.forEach(function (b) { sum += eqAt(b, f); });
+      if (i) g.lineTo(X(f), Y(sum)); else g.moveTo(X(f), Y(sum));
+    }
+    g.stroke(); g.setLineDash([]);
+  }
+  g.globalAlpha = 1; g.strokeStyle = lite;
+  g.lineWidth = Math.max(2.5, h * 0.016); g.lineJoin = "round"; g.lineCap = "round"; g.beginPath();
+  pts.forEach(function (p, i) { if (i) g.lineTo(p[0], p[1]); else g.moveTo(p[0], p[1]); });
+  g.stroke();
+  g.restore();
+  var at = function (f) {                                                 // the current curve's dB at f
+    var u = Math.log(f / 20) / Math.log(1000) * (EQ_N - 1), i = Math.max(0, Math.min(EQ_N - 2, Math.floor(u))), t = Math.max(0, Math.min(1, u - i));
+    return eqCur[i] + (eqCur[i + 1] - eqCur[i]) * t;
+  };
+  if (eqDev) {                                                            // EQ Eight: numbered dots at each band's frequency and gain
+    var named = false, top = null;
+    eqBands.forEach(function (b) {
+      var on = !!eqHot[b.slot], x = X(Math.max(20, Math.min(20000, b.f)));
+      var y = Y(/^(ls|hs|bell)$/.test(b.bq) ? b.g : 0), rr = fs * (on ? 0.82 : 0.72);
+      g.globalAlpha = 1; g.fillStyle = on ? ink : "#0d0f13"; g.strokeStyle = on ? ink : lite; g.lineWidth = 2;
+      g.beginPath(); g.arc(x, y, rr, 0, 6.2832); g.fill(); g.stroke();
+      g.font = "800 " + (fs * 0.95) + "px system-ui, -apple-system, sans-serif"; g.textAlign = "center";
+      g.fillStyle = on ? "#0d0f13" : lite; g.fillText(String(b.slot), x, y + 0.5);
+      if (on && (!top || y < top[1])) top = [x, y, rr];
+    });
+    if (top && eqHotName) {                                               // the macro's name over its highest band
+      named = true;
+      var tx = top[0], ty = top[1], tr = top[2];
+      g.font = "700 " + fs + "px system-ui, -apple-system, sans-serif"; g.fillStyle = ink; g.globalAlpha = 0.9;
+      g.textAlign = tx < x0 + xw * 0.15 ? "left" : tx > x0 + xw * 0.85 ? "right" : "center";
+      g.fillText(eqHotName, tx, ty - tr - fs * 0.8 < yTop ? ty + tr + fs * 0.9 : ty - tr - fs * 0.8);
+    }
+    if (!named && eqHotName) {                                            // not known yet which bands it moves: name top left
+      g.font = "700 " + fs + "px system-ui, -apple-system, sans-serif"; g.fillStyle = ink; g.globalAlpha = 0.9; g.textAlign = "left";
+      g.fillText(eqHotName, x0 + fs * 3.2, yTop - fs * 0.7);
+    }
+    if (eqDev.on === false) { g.globalAlpha = 0.7; g.textAlign = "center"; g.fillStyle = ink; g.fillText(eqDev.name + " is off", x0 + xw / 2, ym - fs); }
+    g.globalAlpha = 1;
+    return;
+  }
+  eqBands.forEach(function (b) {                                          // a dot where each macro works
+    var f = Math.max(20, Math.min(20000, b.f)), on = b.slot === eqActive, x = X(f), y = Y(at(f));
+    g.globalAlpha = on ? 1 : 0.75; g.fillStyle = on ? ink : eqCol; g.strokeStyle = "#0d0f13"; g.lineWidth = 2;
+    g.beginPath(); g.arc(x, y, on ? fs * 0.55 : fs * 0.38, 0, 6.2832); g.fill(); g.stroke();
+    if (on) {
+      g.font = "700 " + fs + "px system-ui, -apple-system, sans-serif"; g.fillStyle = ink; g.globalAlpha = 0.9;
+      g.textAlign = x < x0 + xw * 0.15 ? "left" : x > x0 + xw * 0.85 ? "right" : "center";
+      var ly = y - fs * 1.2 < yTop ? y + fs * 1.3 : y - fs * 1.2;
+      g.fillText(b.name, x, ly);
+    }
+  });
+  g.globalAlpha = 1;
+}
+
+// The pickup meter: the dot is where your knob/fader is, the line is where the parameter's value is.
+var caughtTimer = null;
+function meter(msg) {
+  var wrap = el("meterWrap"), m = el("meter");
+  if (typeof msg.target !== "number") { wrap.classList.remove("show"); return; }
+  wrap.classList.add("show");
+  var c = Math.max(0, Math.min(1, msg.control)), t = Math.max(0, Math.min(1, msg.target));
+  var pct = function (x) { return Math.round(x * 100) + " %"; };
+  el("mctrl").style.left = (c * 100) + "%";
+  el("mtarget").style.left = (t * 100) + "%";
+  el("mctrlv").textContent = pct(c);
+  el("mtargetv").textContent = pct(t);
+  el("mfill").style.width = (t * 100) + "%";
+  if (msg.pickup) {
+    m.classList.remove("caught");
+    el("mgap").style.left = (Math.min(c, t) * 100) + "%";
+    el("mgap").style.width = (Math.abs(t - c) * 100) + "%";
+    el("mstate").textContent = (t > c ? "→ move up " : "← move down ") + Math.round(Math.abs(t - c) * 100) + " %";
+    clearTimeout(caughtTimer); caughtTimer = null;
+  } else {
+    m.classList.add("caught");
+    el("mctrl").style.left = (t * 100) + "%";
+    if (msg.caught) {
+      el("mstate").textContent = "✓ caught";
+      clearTimeout(caughtTimer);
+      caughtTimer = setTimeout(function () { el("mstate").textContent = ""; caughtTimer = null; }, 1500);
+    } else if (!caughtTimer) {
+      el("mstate").textContent = "";
+    }
+  }
+}
+
+function setPage(n) {
+  if (!PAGES[n]) return;      // (PAGES follows the script's PAGE_ORDER, see showState)
+  el("pageNum").textContent = "Page " + n;
+  el("pageName").textContent = PAGES[n][0];
+  rootProp("--pc", PAGES[n][1]);
+  curPage = n;
+}
+
+// ---------- groups: the button shows soft, blobby blend of the colours of the tracks inside ----------
+// CSS only: a swirl (conic gradient) through the group's own colour and its tracks' colours, plus two round blobs per track at spots picked
+// from the group's name (so each group keeps its own pattern), all blurred together (.blend::before).
+// (The Alias 8 itself pulses through the colours instead.)
+function seeded(str) {                           // a small repeatable random number generator from a text
+  var h = 2166136261;
+  for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return function () { h = Math.imul(h ^ (h >>> 15), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); h ^= h >>> 16; return (h >>> 0) / 4294967296; };
+}
+function blendBg(kids, name) {
+  var n = kids.length, rnd = seeded(String(name || "") + kids.join("")), layers = [];
+  kids.forEach(function (c, k) {
+    for (var b = 0; b < 2; b++) {                // blob 1 near the track's place in order (left to right), blob 2 anywhere
+      var x = b === 0 ? (n === 1 ? 50 : 8 + k / (n - 1) * 84) + (rnd() - 0.5) * 20 : 10 + rnd() * 80;
+      var y = 10 + rnd() * 80, r = 28 + rnd() * 22;
+      layers.push("radial-gradient(ellipse " + r.toFixed(0) + "% " + (r * 1.3).toFixed(0) + "% at " + x.toFixed(0) + "% " + y.toFixed(0) + "%, " + c + " 0%, " + c + " 35%, transparent 100%)");
+    }
+  });
+  var from = Math.round(rnd() * 360), cx = 30 + Math.round(rnd() * 40), cy = 30 + Math.round(rnd() * 40);
+  layers.push("conic-gradient(from " + from + "deg at " + cx + "% " + cy + "%, " + kids.concat([kids[0]]).join(", ") + ")");
+  return layers.join(", ");
+}
+function setBlend(node, c) {
+  if (c && c.kids && c.kids.length) {
+    node.classList.add("blend");
+    node.style.setProperty("--kg", blendBg([c.rgb || "#888888"].concat(c.kids).map(btnColour), c.name));   // the group's own colour too
+  }
+}
+
+// ---------- Live's play / record state in the header ----------
+function showTransport(tr) {
+  var box = el("transport");
+  if (!box) return;
+  box.hidden = !tr;                              // an older script sends nothing: no icons
+  if (!tr) return;
+  box.classList.toggle("play", !!tr.play);
+  box.classList.toggle("rec", !!tr.rec);
+  box.classList.toggle("srec", !tr.rec && !!tr.srec);
+  el("tPlay").setAttribute("aria-label", tr.play ? "playing" : "stopped");
+  el("tRec").setAttribute("aria-label", tr.rec ? "recording" : tr.srec ? "session recording" : "not recording");
+  box.title = "Live: " + (tr.play ? "playing" : "stopped") + (tr.rec ? " · recording" : tr.srec ? " · session recording" : "");
+}
+
+// ---------- the controller state: macros, sends, overview, the 8 buttons ----------
+var lastState = null;
+function showState(st) {
+  lastState = st;
+  if (el("setPanel").classList.contains("show") && typeof st.rack_tap === "boolean") el("optRackTap").checked = st.rack_tap;
+  if (st.pages && st.pages.length) {             // page names and colours in the order of PAGE_ORDER
+    PAGES = {};
+    st.pages.forEach(function (p, i) { PAGES[i + 1] = [p[0], p[1]]; });
+  }
+  setPage(st.page);
+  learnColors(st);
+  if (ownerText && !el("owner").querySelector(".hc") && Object.keys(trackColors).length) setOwner(ownerText);   // colours arrived
+  if (typeof st.tempo === "number" && st.tempo > 0) tempo = st.tempo;
+  showTransport(st.transport);
+  showMacros(st.macros);
+  showOverview(st.tracks || [], st.returns || []);
+  showMap(st);
+  showPerform(st);
+  showLegend(st);
+  applySplit();
+  el("panels").classList.add("show");
+  el("bottom").classList.add("show");
+}
+
+// The 8 buttons: the track's true colour; the bright part rising from the bottom is its volume
+function showMap(st) {
+  var map = el("map");
+  map.textContent = "";
+  map.classList.toggle("nometers", !metersSeen);   // no strip until the script sends levels (STATUS_METERS)
+  (st.cols || []).forEach(function (c, i) {
+    var box = document.createElement("div");
+    box.className = "col";
+    var num = document.createElement("div");
+    num.className = "num";
+    num.appendChild(document.createTextNode(String(i + 1)));
+    var name = document.createElement("div");
+    name.className = "name";
+    if (c.kind === "empty") {
+      box.classList.add("empty");
+      name.textContent = "–";
+    } else {
+      box.style.setProperty("--c", btnColour(c.rgb));
+      setBlend(box, c);
+      box.style.setProperty("--v", (typeof c.vol === "number" ? Math.round(c.vol * 1000) / 10 : 0) + "%");
+      if (c.selected) box.classList.add("sel");
+      if (c.send) box.classList.add("sendcol");
+      if (c.muted) box.classList.add("muted");
+      if (st.layer && c.kind === "return" && c.name === st.layer) box.classList.add("layer");
+      name.textContent = stripLetter(c.name);
+      box.title = stripLetter(c.name) + (typeof c.vol === "number" ? (c.send ? " · send " : " · volume ") + Math.round(c.vol * 100) + " %" : "");
+      if (c.focus) box.classList.add("focus");
+      [[c.focus, "f", "FOCUS"], [c.focusable && !c.focus, "fg", "✱"], [c.kind === "return", "r", "RET"], [c.muted, "m", "M"], [c.soloed, "s", "S"]].forEach(function (t) {
+        if (!t[0]) return;
+        var s = document.createElement("span");
+        s.className = "tag " + t[1];
+        s.textContent = t[2];
+        num.appendChild(s);
+      });
+      if (c.armed) { var a = document.createElement("div"); a.className = "arm"; a.title = "armed"; box.appendChild(a); }
+    }
+    var pale = document.createElement("div");      // group blend: paler above the volume
+    pale.className = "pale";
+    box.appendChild(pale);
+    box.appendChild(num);
+    box.appendChild(name);
+    var mtr = document.createElement("div");
+    mtr.className = "mtr";
+    mtr.appendChild(document.createElement("b"));
+    mtr.appendChild(document.createElement("s"));
+    box.appendChild(mtr);
+    var grs = document.createElement("div");
+    grs.className = "grs";
+    grs.appendChild(document.createElement("b"));
+    box.appendChild(grs);
+    box.dataset.track = c.kind === "empty" ? "" : (c.name || "");
+    var prev = (st.cols || [])[i - 1];
+    if (c.kind === "return" && prev && prev.kind !== "return") {
+      var d = document.createElement("div");
+      d.className = "divider";
+      map.appendChild(d);
+    }
+    if (c.kind === "return") box.classList.add("ret");
+    map.appendChild(box);
+  });
+  placeRetBoxes();
+}
+
+// the yellow box around each run of return buttons (absolutely placed, so the buttons keep their widths)
+var RETBOX_PAD = 5;
+function placeRetBoxes() {
+  var map = el("map");
+  if (!map) return;
+  Array.prototype.forEach.call(map.querySelectorAll(".retbox"), function (b) { b.remove(); });
+  var cols = Array.prototype.slice.call(map.querySelectorAll(".col")), mr = map.getBoundingClientRect();
+  for (var i = 0; i < cols.length; i++) {
+    if (!cols[i].classList.contains("ret") || (i > 0 && cols[i - 1].classList.contains("ret"))) continue;
+    var j = i;
+    while (j + 1 < cols.length && cols[j + 1].classList.contains("ret")) j++;
+    var a = cols[i].getBoundingClientRect(), z = cols[j].getBoundingClientRect(), box = document.createElement("div");
+    box.className = "retbox";
+    box.style.left = (a.left - mr.left - RETBOX_PAD) + "px";
+    box.style.top = (a.top - mr.top - RETBOX_PAD) + "px";
+    box.style.width = (z.right - a.left + 2 * RETBOX_PAD) + "px";
+    box.style.height = (a.height + 2 * RETBOX_PAD) + "px";
+    map.insertBefore(box, map.firstChild);
+  }
+}
+window.addEventListener("resize", placeRetBoxes);
+if (window.ResizeObserver) new ResizeObserver(function () { placeRetBoxes(); }).observe(document.getElementById("map"));   // also in the float window
+
+// Small boxes for every track (left) and every return (right) in their true colours;
+// the lighter grey behind some of them = what the controller shows on this page
+function fillStrip(strip, items, label, isRet) {
+  strip.textContent = "";
+  var lab = document.createElement("span");
+  lab.className = "stripLabel";
+  lab.textContent = label;
+  strip.appendChild(lab);
+  // tracks: one rectangle from the first to the last track on the controller, also around tracks folded
+  // away in between (Live's box spans them too); returns: a box around each run of returns on the page
+  var firstOn = -1, lastOn = -1;
+  items.forEach(function (it, i) { if (it.on) { if (firstOn < 0) firstOn = i; lastOn = i; } });
+  var inRing = function (i) { return isRet ? !!(items[i] && items[i].on) : (firstOn >= 0 && i >= firstOn && i <= lastOn); };
+  items.forEach(function (it, i) {
+    var b = document.createElement("div");
+    b.className = "ob" + (inRing(i) ? " on" : "") + (it.reach === false ? " out" : "") + (it.group ? " ogrp" : "") + (isRet ? " ret" : "") +
+      (!isRet && it.depth ? " d" + Math.min(3, it.depth) : "");
+    if (inRing(i) && !inRing(i - 1)) b.classList.add("first");
+    if (inRing(i) && !inRing(i + 1)) b.classList.add("last");
+    b.title = stripLetter(it.name) + (it.reach === false ? " (hidden)" : "") +
+      (isRet && typeof it.send === "number" ? " · send " + Math.round(it.send * 100) + " %" : "");
+    var sw = document.createElement("i");
+    sw.style.setProperty("--c", btnColour(it.rgb));
+    if (isRet) {
+      var bar = document.createElement("b");
+      bar.style.setProperty("--s", (typeof it.send === "number" ? Math.round(it.send * 1000) / 10 : 0) + "%");
+      sw.appendChild(bar);
+    }
+    b.appendChild(sw);
+    strip.appendChild(b);
+  });
+}
+function showOverview(tracks, rets) {
+  fillStrip(el("trkStrip"), tracks, "Tracks");
+  fillStrip(el("retStrip"), rets, "Returns", true);
+}
+
+// ---------- macros ----------
+var SVGNS = "http://www.w3.org/2000/svg";
+var ARC_LEN = 0.75 * 2 * Math.PI * 40;      // a knob turns through 270 degrees
+// The four knob groups (macros 1-4, 5-8, 9-12, 13-16) and their colours. Tracks and the Master: the rack
+// layout spec. Returns and Master: their own names, same colours by position (blue, orange, green, purple).
+// colours by role: Tone / Filter / Space(returns) blue, Dynamics / Glue / Sidechain green, Character / Drive / Colour
+// orange, Space / Output purple
+var TRACK_GROUPS = [["g2", "Heat"], ["g3", "Motion"], ["g1", "Colour"], ["g4", "Space"]];   // Heat orange, Motion green, Colour blue, Space purple
+var RETURN_GROUPS = [["g1", "Space", "size/time · decay/feedback · pre-delay/blur · density/weight"],
+                     ["g2", "Colour", "tail brightness · movement · signature control"],
+                     ["g3", "Sidechain", "ducks the tail while the source plays"],
+                     ["g4", "Output", "width · tail drive · performance filter · cleanup"]];
+var MASTER_GROUPS = [["g1", "Filter", "filter freq · res · LFO amount · LFO rate"],
+                     ["g3", "Glue", "glue compressor: dry/wet · threshold · attack · release"],
+                     ["g2", "Drive", "drive · drive dry/wet · gain low · gain high"],
+                     ["g4", "Output", "width · limiter gain · limiter ceiling · bass mono"]];
+var GROUPS = TRACK_GROUPS, groupsBuilt = null, curPage = 0;
+var COMP_GROUPS = { Dynamics: 1, Glue: 1, Sidechain: 1 };   // (older scripts) the group with the compressor gets the GR meter
+var COMP_IDX = 1;                                            // which group has the compressor (0-3, -1 = none)
+function compRange() {                                   // its macro numbers on the current page, e.g. [5, 8]
+  return COMP_IDX >= 0 ? [COMP_IDX * 4 + 1, COMP_IDX * 4 + 4] : [0, -1];
+}
+// Small line icons for the kind of rack the knobs show, before its name (24 x 24, drawn in the text colour)
+function rackIcon(body) { return '<svg class="ri" viewBox="0 0 24 24" aria-hidden="true">' + body + '</svg>'; }
+var RACK_ICONS = {
+  instrument: rackIcon('<rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M9 5v14M15 5v14"/>' +   // piano keys
+    '<rect class="f" x="7.4" y="5" width="3.2" height="8" rx="0.6"/><rect class="f" x="13.4" y="5" width="3.2" height="8" rx="0.6"/>'),
+  drum: rackIcon('<ellipse cx="12" cy="14" rx="7.5" ry="2.4"/><path d="M4.5 14v4.2a7.5 2.4 0 0 0 15 0V14"/>' +   // snare and sticks
+    '<path d="M5.5 3.5l8 8.5M18.5 3.5l-8 8.5"/>'),
+  effect: rackIcon('<rect x="2.5" y="5.5" width="19" height="13" rx="3"/><path d="M7.5 15.5v-7h3.6M7.5 12h3M13.6 8.5l3.8 7M17.4 8.5l-3.8 7"/>'),   // FX
+  bus: rackIcon('<path d="M3 5.5c5.5 0 6 6.5 10 6.5M3 12h10M3 18.5c5.5 0 6-6.5 10-6.5M13 12h7.5M17.5 9l3 3-3 3"/>'),   // lines merging into one
+  "return": rackIcon('<path d="M20 9.5H9a4.5 4.5 0 0 0 0 9h6"/><path d="M16.5 6l3.5 3.5-3.5 3.5"/>'),   // out and back
+  master: rackIcon('<rect x="5" y="2.5" width="14" height="19" rx="2.2"/><circle cx="12" cy="14.5" r="3.8"/><circle cx="12" cy="7.2" r="1.4"/>'),   // speaker
+  midi: rackIcon('<circle cx="12" cy="12" r="9"/><path d="M10.5 3.2h3"/>' +   // a MIDI (DIN) socket: 5 pins in an arc
+    '<circle class="f" cx="7" cy="12" r="1.25"/><circle class="f" cx="17" cy="12" r="1.25"/><circle class="f" cx="8.5" cy="8.4" r="1.25"/>' +
+    '<circle class="f" cx="15.5" cy="8.4" r="1.25"/><circle class="f" cx="12" cy="7" r="1.25"/>')
+};
+// The knob groups' colours by name (RACK_LAYOUTS in settings.py), and the same colours for dots in the rack strip
+var GROUP_CLASS = { blue: "g1", orange: "g2", green: "g3", purple: "g4" };
+var DOT_COLOR = { blue: "#4f8fcf", orange: "#e07a3a", green: "#5fae49", purple: "#9a6ac0",
+  teal: "#14b8a6", red: "#e5484d", yellow: "#f2c12e", pink: "#f472b6", grey: "#94a3b8", gray: "#94a3b8" };
+// Each kind of rack has a colour (kept away from the knob groups' blue / green / orange / purple)
+var KIND_COLOR = { instrument: "#14b8a6", drum: "#f26b38", effect: "#9f6af0", bus: "#94a3b8", "return": "#f2c12e",
+  master: "var(--text)", midi: "#f472b6" };
+var KIND_WORD = { instrument: "INSTRUMENT", drum: "DRUM", effect: "EFFECT", bus: "BUS", "return": "RETURN", master: "MASTER", midi: "MIDI" };
+var RACK_KIND_NAME = { instrument: "Instrument rack", drum: "Drum rack", effect: "Effect rack", bus: "Bus (group) rack",
+  "return": "Return rack", master: "Master rack", midi: "MIDI effect rack" };
+
+// The rack strip: every rack on the track (outer before inner), the one the knobs show highlighted, click = go there
+function showRackStrip(m) {
+  var box = el("rackstrip");
+  if (!m) { if (box.firstChild) box.textContent = ""; box.dataset.sig = ""; return; }
+  var sig = JSON.stringify([m.racks, m.rack_n]);
+  if (box.dataset.sig === sig) return;
+  box.dataset.sig = sig;
+  box.textContent = "";
+  m.racks.forEach(function (r, i) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "rchip" + (r.depth ? " d" + Math.min(2, r.depth) : "") + (i === m.rack_n - 1 ? " on" : "");
+    var dot = r.dot ? (DOT_COLOR[String(r.dot).toLowerCase()] || String(r.dot)) : KIND_COLOR[r.kind];   // RACK_LAYOUTS "dot"
+    if (dot) b.style.setProperty("--ck", dot);
+    var nm = String(r.name || "").replace(/\s*alias\s?8\b/ig, " ").replace(/\s+/g, " ").trim();
+    b.innerHTML = (r.depth ? '<span class="ar">' + (r.depth > 1 ? "↳↳" : "↳") + '</span>' : "") + "<i></i><span></span>";
+    b.querySelector("span:last-child").textContent = nm;
+    b.title = (RACK_KIND_NAME[r.kind] || "Rack") + ": " + nm + (r.depth ? " (inside another rack)" : "") + " · click = the knobs show this rack";
+    b.addEventListener("click", function () { sendControl({ cmd: "setrack", i: i }); });
+    box.appendChild(b);
+  });
+}
+
+// The knob groups for the rack the knobs show: the script sends its kind (instrument, drum, effect, bus, return,
+// master) and the 4 names from settings.py (QUADRANT_NAMES, GR_QUADRANT). Each position keeps its colour; the
+// built-in descriptions (tooltips) stay when a name is unchanged.
+function groupsFor(m, pageName) {
+  var base = pageName === "Returns" ? RETURN_GROUPS : pageName === "Master" ? MASTER_GROUPS : TRACK_GROUPS;
+  if (!m || !m.groups || m.groups.length !== 4) {                // an older script: by page, as before
+    COMP_IDX = -1;
+    base.forEach(function (g, i) { if (COMP_IDX < 0 && COMP_GROUPS[g[1]]) COMP_IDX = i; });
+    return base;
+  }
+  var kindBase = m.kind === "return" ? RETURN_GROUPS : m.kind === "master" ? MASTER_GROUPS : TRACK_GROUPS;
+  COMP_IDX = typeof m.gr === "number" ? m.gr - 1 : 1;
+  var gcol = m.gcolors || [];                                   // RACK_LAYOUTS: "blue" / "orange" / "green" / "purple"
+  var sig = m.kind + "|" + m.groups.join("|") + "|" + COMP_IDX + "|" + gcol.join(",");
+  if (groupsFor.sig === sig) return groupsFor.last;             // the same: keep the built knobs
+  groupsFor.sig = sig;
+  groupsFor.last = kindBase.map(function (g, i) {
+    var name = String(m.groups[i] || g[1]);
+    return [GROUP_CLASS[gcol[i]] || g[0], name, name === g[1] ? g[2] : ""];
+  });
+  return groupsFor.last;
+}
+var knobs = [], macroOwner = null, activeTimer = null;
+
+function makeKnob() {
+  var k = document.createElement("div");
+  k.className = "knob";
+  var svg = document.createElementNS(SVGNS, "svg");
+  svg.setAttribute("viewBox", "0 0 100 100");
+  ["trk", "arc", "p1", "p2"].forEach(function (cls) {
+    var c = document.createElementNS(SVGNS, "circle");
+    c.setAttribute("cx", "50"); c.setAttribute("cy", "50"); c.setAttribute("r", "40");
+    c.setAttribute("class", cls);
+    c.setAttribute("transform", "rotate(135 50 50)");      // start at 7 o'clock
+    c.setAttribute("stroke-dasharray", cls === "trk" ? ARC_LEN + " 999" : "0 999");
+    if (cls === "p1" || cls === "p2") c.setAttribute("stroke", "#ffffff");
+    svg.appendChild(c);
+  });
+  var t = document.createElementNS(SVGNS, "text");
+  t.setAttribute("x", "50"); t.setAttribute("y", "52"); t.setAttribute("class", "val");
+  svg.appendChild(t);
+  var u = document.createElementNS(SVGNS, "text");          // the value type (kHz, dB, % ...) under the value
+  u.setAttribute("x", "50"); u.setAttribute("y", "70"); u.setAttribute("class", "unit");
+  svg.appendChild(u);
+  var nm = document.createElement("div");
+  nm.className = "nm";
+  k.appendChild(svg);
+  k.appendChild(nm);
+  return k;
+}
+// Each group heading (written upwards) gets exactly the height of its knobs, so a long name wraps to a second
+// line instead of making the group taller. It breaks between words; if a word doesn't fit or it needs more than two
+// lines, the font gets a little smaller (down to 9 px), and only then is a long word split.
+function fitHeads() {
+  var heads = document.querySelectorAll("#macros .grp .gh");
+  if (pipWin) heads = Array.prototype.slice.call(heads).concat(Array.prototype.slice.call(pipWin.document.querySelectorAll("#macros .grp .gh")));
+  Array.prototype.forEach.call(heads, function (gh) {
+    var gk = gh.parentNode && gh.parentNode.querySelector(".gk");
+    if (!gk) return;
+    gh.style.fontSize = ""; gh.style.overflowWrap = ""; gh.style.height = "0px";   // measure the knobs without the heading
+    var avail = gk.offsetHeight;
+    if (!avail) { gh.style.height = ""; return; }
+    gh.style.height = avail + "px";
+    gh.style.overflowWrap = "normal";                            // first: break only between words
+    var size = parseFloat(getComputedStyle(gh).fontSize) || 14;
+    var tooBig = function () {                                   // a word longer than the height, or more than 2 lines
+      return gh.scrollHeight > gh.clientHeight + 1 || gh.scrollWidth > size * 1.05 * 2 + 6;   // (written upwards)
+    };
+    while (size > 9 && tooBig()) { size -= 1; gh.style.fontSize = size + "px"; }
+    if (gh.scrollHeight > gh.clientHeight + 1) gh.style.overflowWrap = "anywhere";   // last resort: split a long word
+  });
+}
+// If the rack row and the 16 knobs don't fit in the panel (e.g. with the rack strip), the knobs get a little smaller
+// (--ks, down to 60 %) until they do.
+function fitPanel() {
+  placeSideLater();
+  if (eqOn) requestAnimationFrame(placeEq);
+  var panels = el("panels"), mbox = el("macros");
+  if (!panels || !mbox || !mbox.firstChild || panels.classList.contains("perf")) return;
+  var ks = 1;
+  panels.style.setProperty("--ks", "1");
+  var over = function () { return mbox.getBoundingClientRect().bottom > panels.getBoundingClientRect().bottom - 2; };
+  while (ks > 0.6 && over()) { ks = Math.round((ks - 0.05) * 100) / 100; panels.style.setProperty("--ks", String(ks)); }
+}
+var fitHeadsRaf = null;
+function fitHeadsLater() { if (!fitHeadsRaf) fitHeadsRaf = requestAnimationFrame(function () { fitHeadsRaf = null; fitPanel(); fitHeads(); }); }
+if (window.ResizeObserver) new ResizeObserver(fitHeadsLater).observe(document.getElementById("macros"));
+window.addEventListener("resize", fitHeadsLater);
+
+function buildMacros(box) {
+  groupsBuilt = GROUPS;
+  box.textContent = "";
+  knobs = [];
+  GROUPS.forEach(function (g, gi) {
+    var grp = document.createElement("div");
+    grp.className = "grp " + g[0];
+    var gh = document.createElement("div");
+    gh.className = "gh";
+    gh.textContent = g[1];
+    gh.title = g[1] + " · macros " + (gi * 4 + 1) + "–" + (gi * 4 + 4) + (g[2] ? " · " + g[2] : "");
+    var gk = document.createElement("div");
+    gk.className = "gk";
+    for (var i = 0; i < 4; i++) {
+      var k = makeKnob();
+      gk.appendChild(k);
+      knobs.push(k);
+    }
+    grp.appendChild(gh);
+    grp.appendChild(gk);
+    if (gi === COMP_IDX) {                         // the group with the compressor: its gain reduction
+      var gm = document.createElement("div");
+      gm.className = "grm";
+      gm.innerHTML = '<div class="sc"></div><div class="tube"><b></b><s></s></div><div class="rd"><span class="l">GR</span><span class="n">0.0</span><span class="l">dB</span></div>';
+      GR_TICKS.forEach(function (d) {
+        var sp = document.createElement("span"); sp.textContent = d; sp.style.top = (grPos(d) * 100) + "%";
+        gm.firstChild.appendChild(sp);
+      });
+      grp.appendChild(gm);
+      grGroup = grp;
+    }
+    box.appendChild(grp);
+  });
+  fitHeadsLater();
+}
+
+// "1.20 kHz" -> ["1.20", "kHz"], "-12.0 dB" -> ["-12.0", "dB"], "50 %" -> ["50", "%"], "1/16" -> ["1/16", ""],
+// "-inf dB" -> ["-inf", "dB"], "2.5:1" -> ["2.5:1", ""], "Off" -> ["Off", ""]: the number on top, its type (unit) underneath
+function splitValue(text) {
+  var t = String(text).trim();
+  var m = t.match(/^([-+−]?(?:inf|\d+(?:[.,]\d+)?|[.,]\d+)(?:[\/:]\d+(?:[.,]\d+)?)?)\s*(.*)$/i);
+  if (!m) return [t, ""];
+  return [m[1], m[2].trim()];
+}
+var lastMacros = null;
+// Changing track (or page): show that track's last turned macro with its current value, or nothing
+var lastKnob = {}, shownOwner;
+function ownerChanged(m) {
+  var owner = m ? m.owner : null, rec = owner ? lastKnob[grKey(owner)] : null;
+  var it = rec && m.items ? m.items[rec.n - 1] : null;
+  el("meterWrap").classList.remove("show");
+  el("hint").textContent = "";
+  el("grbar").classList.remove("show"); grFocus = null;
+  eqHide();
+  if (it && typeof it.v === "number") {
+    setOwner(owner);
+    el("main").textContent = rec.main;
+    el("valueText").textContent = it.text || (Math.round(it.v * 100) + " %");
+    timeViz(rec.main, it.text);
+    var stage = el("stage");
+    stage.classList.remove("idle");
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(function () { stage.classList.add("idle"); }, IDLE_MS);
+    activeKnob([rec.n, owner], null);
+  } else {
+    setOwner(owner || "");                       // no knob turned here yet: just the track's name
+    el("main").textContent = "";
+    el("valueText").textContent = "";
+    timeViz("", "");
+  }
+}
+function showMacros(m) {
+  lastMacros = m;
+  var ow = m ? m.owner : null;
+  var changed = shownOwner !== undefined && ow !== shownOwner;
+  shownOwner = ow;
+  showRates(m);
+  var box = el("macros");
+  var items = (m && m.items) || [];
+  var cleanRack = function (n) { return String(n || "").replace(/\s*alias\s?8\b/ig, " ").replace(/\s+/g, " ").trim(); };   // "Lead Alias8 FX" -> "Lead FX"
+  var rn = cleanRack(m && m.rack);
+  if (rn && m.rack_path && m.rack_path.length) rn = m.rack_path.map(cleanRack).concat([rn]).join(" › ");   // a rack inside a rack
+  var many = m && m.rack_count > 1;
+  var stripOn = many && opts.rackStrip && m.racks && m.racks.length > 1;
+  if (many && rn && !stripOn) rn += "  ·  " + m.rack_n + "/" + m.rack_count;   // which rack (the strip shows it otherwise)
+  var kind = m && RACK_ICONS[m.kind] ? m.kind : "";
+  var rsig = kind + "|" + rn, rbox = el("rackname");
+  var panels = el("panels"), mbox = el("macros"), depth = (m && m.rack_path) ? m.rack_path.length : 0;
+  if (kind) panels.style.setProperty("--kc", KIND_COLOR[kind]); else panels.style.removeProperty("--kc");
+  mbox.classList.toggle("kc", !!kind);
+  mbox.classList.toggle("nest1", depth === 1);
+  mbox.classList.toggle("nest2", depth >= 2);
+  if (depth) mbox.setAttribute("data-nest", m.rack_path.map(cleanRack).join(" › ")); else mbox.removeAttribute("data-nest");
+  var pg = m && m.page ? m.page : "";                    // Perform / Detail / Dynamics page look (settings.py section 13)
+  ["perform", "detail", "dynamics", "mix"].forEach(function (p) { mbox.classList.toggle("pg-" + p, pg === p); });
+  var pgs = el("pgstrip"), have = (m && m.pages) || [];
+  if (pgs) {
+    pgs.classList.toggle("off", !pg);
+    Array.prototype.forEach.call(pgs.children, function (s) {
+      s.classList.toggle("on", s.dataset.p === pg);
+      s.classList.toggle("has", have.indexOf(s.dataset.p) >= 0);
+    });
+  }
+  var pst = m && m.pstyle;
+  if (pst) {
+    if (typeof pst.detail_soften === "number") rootProp("--pd-keep", Math.round(Math.max(0, Math.min(1, 1 - pst.detail_soften)) * 100) + "%");
+    if (pst.detail_frame) rootProp("--pf-detail", pst.detail_frame);
+    if (pst.dyn_colour) rootProp("--pdyn", pst.dyn_colour);
+    if (pst.dyn_frame) rootProp("--pf-dyn", pst.dyn_frame);
+    if (pst.mix_frame) rootProp("--pf-mix", pst.mix_frame);
+    for (var qn in (pst.qcolours || {})) rootProp("--qc-" + qn, pst.qcolours[qn]);
+    if (pst.ceq) {                                 // settings.py COLOUR_EQ_WORDS / COLOUR_EQ / COLOUR_EQ_RANGE
+      if (pst.ceq.words) EQ_WORDS = pst.ceq.words.map(function (w) { return String(w).toLowerCase(); });
+      if (pst.ceq.map) { EQ_MAP = {}; for (var en in pst.ceq.map) EQ_MAP[String(en).trim().toLowerCase()] = pst.ceq.map[en]; }
+      if (pst.ceq.range > 0) EQ_RANGE = pst.ceq.range;
+    }
+  }
+  var hadStrip = !!el("rackstrip").firstChild;
+  showRackStrip(stripOn ? m : null);
+  if (hadStrip !== !!el("rackstrip").firstChild) fitHeadsLater();
+  if (rbox.dataset.sig !== rsig) {
+    rbox.dataset.sig = rsig;
+    rbox.innerHTML = rn ? (kind ? RACK_ICONS[kind] + '<span class="kw">' + KIND_WORD[kind] + '</span>' : "") + '<span class="rt"></span>' : "";
+    if (rn) rbox.querySelector(".rt").textContent = rn;
+    rbox.title = rn ? (kind ? RACK_KIND_NAME[kind] + ": " : "Rack: ") + rn + (many ? " · click or press S for the next rack" : "") : "";
+  }
+  el("rackname").classList.toggle("many", !!many);
+  macroOwner = m ? m.owner : null;
+  var pn = PAGES[curPage] ? PAGES[curPage][0] : "";
+  GROUPS = groupsFor(m, pn);
+  if (knobs.length !== 16 || !box.contains(knobs[0]) || groupsBuilt !== GROUPS) buildMacros(box);
+  showVoice(m && m.voice);
+  for (var j = 0; j < 16; j++) {
+    var it = items[j], label = it ? (it.name || "") : "";
+    if (j === 12 && (!label || /^Macro\s*13$/i.test(label))) label = "Width";   // knob 13 is always Stereo Width
+    fillKnob(knobs[j], it, label || (j === 12 ? "Width" : ""), j + 1);
+  }
+  for (var q = 0; q < 4; q++) {                   // a group with no free macro (all empty or locked): greyed out
+    var dead = true;
+    for (var qi = q * 4; qi < q * 4 + 4; qi++) {
+      var iq = items[qi];
+      if (iq && typeof iq.v === "number" && !iq.locked) { dead = false; break; }
+    }
+    var gq = knobs[q * 4] ? knobs[q * 4].closest(".grp") : null;
+    if (gq) gq.classList.toggle("dead", dead);
+  }
+  if (eqOn && !changed) {                        // new values from Live while the curve shows: follow them
+    if (eqUpdate()) { if (!eqRaf) eqRaf = requestAnimationFrame(eqFrame); } else eqHide();
+  }
+  if (changed) ownerChanged(m);
+  else if (ow && !el("owner").textContent && (!el("main").textContent || /^Waiting/.test(el("main").textContent))) {
+    setOwner(ow);                                // first state after opening: show which track you're on
+    if (/^Waiting/.test(el("main").textContent)) el("main").textContent = "";
+  }
+}
+
+// ---------- synth picture, faceplate, side line and role icon (settings.py section 14) ----------
+// The script sends m.voice = {synth, synth_name, image, role, accent, rgb, ch} for the knobs' track.
+var shownVoice = null, lastVoice = null, voiceSwapTimer = null, roleIcon = "";
+var ROLE_WORD = { lead: "Lead", arp: "Arp", pad: "Pad", bass: "Bass", texture: "Texture", pluck: "Pluck", keys: "Keys", drums: "Drums",
+                  kick: "Kick", snare: "Snare", hihat: "Hi-hat / tops", percussion: "Percussion", noise: "Noise" };
+
+function hexRgb(h) {
+  h = String(h || "").replace("#", "");
+  if (h.length === 3) h = h.replace(/./g, "$&$&");
+  var n = parseInt(h, 16);
+  return isNaN(n) || h.length !== 6 ? null : [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function luma(rgb) { return (0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]) / 255; }
+// a track colour muted (saturation cut by `mute`) and darkened (brightness cut by `dark`)
+function mutedColour(c, mute, dark) {
+  var rgb = hexRgb(c); if (!rgb) return c || "transparent";
+  var grey = (rgb[0] + rgb[1] + rgb[2]) / 3;
+  return "#" + rgb.map(function (v) { v = Math.round((v + (grey - v) * mute) * (1 - dark)); return (v < 16 ? "0" : "") + v.toString(16); }).join("");
+}
+var BTN_MUTE = 0, BTN_DARK = 0.3;               // track buttons and the track / return overview: full colour, 30 % darker
+var SIDE_MUTE = 0.5, SIDE_DARK = 0.5;           // the side line: half the saturation, half the brightness
+function btnColour(c) { return mutedColour(c || "#888888", BTN_MUTE, BTN_DARK); }
+
+// ---------- role icons: small, display style. 24 x 24, one colour (the track's), two layers: solid + 35 % ----------
+var ICON_FAINT = 0.35;
+function iconColour(c) {                                      // the track colour, bright enough to read on the dark viewer
+  var rgb = hexRgb(c) || [150, 160, 175], L = luma(rgb);
+  if (L >= 0.45) return c;
+  var t = Math.min(0.6, 0.45 - L + 0.2);
+  return "#" + rgb.map(function (v) { v = Math.round(v + (255 - v) * t); return (v < 16 ? "0" : "") + v.toString(16); }).join("");
+}
+var ROLE_ICONS = {
+  // each: [faint layer, solid layer] – SVG markup on a 24 x 24 grid; "@S" = stroked, "@F" = filled
+  lead:       ['<path @S d="M3 9 H8 M3 13 H6"/>',
+               '<ellipse @F cx="9" cy="18.5" rx="4" ry="3" transform="rotate(-20 9 18.5)"/><path @S d="M12.4 17.6 V3 C 14 6, 20 7, 19 12"/>'],
+  arp:        ['<path @S d="M2 20.5 H22 M2 14.5 H22 M2 8.5 H22 M2 2.5 H22"/>',
+               '<path @F d="M2 17 h4 v3 h-4 Z M7 11 h4 v3 h-4 Z M12 5 h4 v3 h-4 Z M17 11 h4 v3 h-4 Z"/>'],
+  pad:        ['<path @S d="M1 15 C 5 9, 8 9, 12 12 S 19 15, 23 9 M1 9 C 5 3, 8 3, 12 6 S 19 9, 23 3"/>',
+               '<path @S d="M1 18 C 5 12, 8 12, 12 15 S 19 18, 23 12"/>'],
+  bass:       ['<path @S d="M1 12 H23"/>',
+               '<path @S stroke-width="2.6" d="M1.5 12 C 4 2, 8 2, 10.5 12 S 17 22, 22.5 12"/>'],
+  texture:    ['<path @F d="M3 3h2v2h-2Z M11 3h2v2h-2Z M17 5h2v2h-2Z M7 9h2v2h-2Z M15 11h2v2h-2Z M3 15h2v2h-2Z M19 15h2v2h-2Z M11 17h2v2h-2Z M7 19h2v2h-2Z M17 19h2v2h-2Z"/>',
+               '<path @F d="M7 3h2v2h-2Z M19 3h2v2h-2Z M3 7h2v2h-2Z M13 7h2v2h-2Z M11 11h2v2h-2Z M19 11h2v2h-2Z M5 13h2v2h-2Z M15 15h2v2h-2Z M3 19h2v2h-2Z M13 21h2v2h-2Z"/>'],
+  pluck:      ['<path @F d="M4 21 V4 C 7 14, 11 19, 22 20.5 V21 Z"/>',
+               '<path @S d="M4 21 V4 C 7 14, 11 19, 22 20.5 M2 21 H22"/>'],
+  keys:       ['<path @F d="M2 4 h20 v16 h-20 Z"/>',
+               '<path @S d="M2 4 h20 v16 h-20 Z M8.7 13 V20 M15.3 13 V20"/><path @F d="M6.7 4 h4 v9 h-4 Z M13.3 4 h4 v9 h-4 Z"/>'],
+  drums:      ['<path @F d="M3 13 h8 v8 h-8 Z M13 3 h8 v8 h-8 Z"/>',
+               '<path @F d="M3 3 h8 v8 h-8 Z M13 13 h8 v8 h-8 Z"/>'],
+  kick:       ['<circle @F cx="12" cy="12" r="6"/>',
+               '<circle @S cx="12" cy="12" r="9.5"/><circle @F cx="12" cy="12" r="2.2"/>'],
+  snare:      ['<ellipse @F cx="12" cy="10" rx="9" ry="3"/>',
+               '<path @S d="M3 10 V17 C 3 21, 21 21, 21 17 V10 M3 10 C 3 6, 21 6, 21 10 M9 7.5 L4 2 M15 7.5 L20 2"/>'],
+  hihat:      ['<path @F d="M2 13.5 Q 12 10 22 13.5 Q 12 15.5 2 13.5 Z"/>',
+               '<path @F d="M2 9.5 Q 12 6 22 9.5 Q 12 11.5 2 9.5 Z"/><path @S d="M12 3 V7 M12 15 V22 M8 22 H16"/>'],
+  percussion: ['<path @S d="M14 14 L21 21"/><circle @F cx="13.4" cy="13.4" r="1.6"/>',
+               '<path @S d="M10.5 3.5 L3 18 H17 L12 8.5"/>'],
+  noise:      ['<path @S d="M1 4 H23 M1 20 H23"/>',
+               '<path @S stroke-width="1.6" d="M1 12 L2.5 8 L3.5 15 L5 6 L6.5 17 L7.5 10 L9 18 L10.5 5 L12 14 L13 9 L14.5 19 L16 7 L17.5 15 L18.5 10 L20 17 L21.5 8 L23 12"/>']
+};
+function roleSvg(role, colour) {
+  var ic = ROLE_ICONS[role];
+  if (!ic) return "";
+  var c = iconColour(colour);
+  var fix = function (m) { return m.replace(/ @S /g, ' fill="none" stroke="' + c + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ')
+                                   .replace(/ @F /g, ' fill="' + c + '" stroke="none" '); };
+  return '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" shape-rendering="geometricPrecision">' +
+    '<g opacity="' + ICON_FAINT + '">' + fix(ic[0]) + '</g><g>' + fix(ic[1]) + '</g></svg>';
+}
+
+// The side line runs from under the top bar to just above the track buttons
+function placeSide() {
+  var sl = el("sideline"); if (!sl) return;
+  var app = sl.parentNode, ar = app.getBoundingClientRect(), doc = app.ownerDocument;
+  var hd = app.querySelector("header"), pg = el("pgrid"), bt = el("bottom");
+  var top = hd ? hd.getBoundingClientRect().bottom - ar.top + 6 : 8;
+  var btm = ar.height - 14;
+  if (pg && pg.offsetParent && pg.getBoundingClientRect().height) btm = pg.getBoundingClientRect().top - ar.top - 8;
+  else if (bt && bt.offsetParent && bt.getBoundingClientRect().height) btm = bt.getBoundingClientRect().top - ar.top - 8;
+  sl.style.top = top + "px";
+  sl.style.height = Math.max(0, btm - top) + "px";
+}
+var sideRaf = null;
+function placeSideLater() { if (!sideRaf) sideRaf = requestAnimationFrame(function () { sideRaf = null; placeSide(); }); }
+window.addEventListener("resize", placeSideLater);
+
+// After the track name, while the name shown is the knobs' track: the role icon and the MIDI channel ("Ch. 4")
+function renderCh() {
+  var box = el("owner"); if (!box) return;
+  Array.prototype.slice.call(box.querySelectorAll(".chtag, .roleicon")).forEach(function (n) { n.remove(); });
+  var v = lastVoice, first = String(ownerText || "").split(/\s+>\s+/)[0];
+  if (!v || !first || !macroOwner || stripLetter(first) !== stripLetter(macroOwner)) return;
+  if (roleIcon) {
+    var ic = document.createElement("span");
+    ic.className = "roleicon";
+    ic.innerHTML = roleIcon;
+    ic.title = ROLE_WORD[v.role] || v.role;
+    box.appendChild(ic);
+  }
+  if (v.ch) {
+    var t = document.createElement("span");
+    t.className = "chtag";
+    if (hexRgb(v.rgb)) t.style.setProperty("--tc", v.rgb);
+    t.textContent = "Ch. " + v.ch;
+    t.title = "MIDI channel " + v.ch;
+    box.appendChild(t);
+  }
+}
+
+function showVoice(v) {
+  lastVoice = v || null;
+  var box = el("macros"), bg = el("synthbg"), sl = el("sideline"), trk = v && hexRgb(v.rgb) ? v.rgb : null;
+  if (trk) sl.style.setProperty("--slc", mutedColour(trk, SIDE_MUTE, SIDE_DARK));
+  sl.classList.toggle("on", !!trk);
+  placeSideLater();
+  showVoiceInfo();
+  var sig = v ? [v.synth, v.image, v.role, v.accent, v.rgb].join("|") : "";
+  if (sig === shownVoice) { renderCh(); return; }
+  var first = shownVoice === null;
+  shownVoice = sig;
+  var apply = function () {
+    var img = v && v.image ? 'url("/synths/' + encodeURIComponent(v.image) + '")' : "";
+    if (img) bg.style.setProperty("--artimg", img); else bg.style.removeProperty("--artimg");
+    bg.classList.toggle("on", !!img);
+    box.classList.toggle("skin", !!(v && v.synth));              // the dark faceplate on the knob groups
+    if (v) box.style.setProperty("--sa", trk ? iconColour(trk) : hexRgb(v.accent) ? v.accent : "#8b93a1");   // edge line colour
+    else box.style.removeProperty("--sa");
+    roleIcon = v && v.role ? roleSvg(v.role, trk || v.accent || "#9aa2b0") : "";
+    renderCh();
+    box.title = v ? [v.synth_name, v.role ? ROLE_WORD[v.role] || v.role : ""].filter(Boolean).join(" · ") : "";
+    bg.classList.remove("swap");
+  };
+  clearTimeout(voiceSwapTimer);
+  if (first) apply();
+  else { bg.classList.add("swap"); voiceSwapTimer = setTimeout(apply, 160); }   // a short fade when the track changes
+}
+function showVoiceInfo() {
+  var info = el("voiceInfo"); if (!info) return;
+  var v = lastVoice;
+  info.textContent = v ? "Now: " + (v.synth_name || "no synth found") + " · " + (v.role ? ROLE_WORD[v.role] || v.role : "no role found") + (v.ch ? " · Ch. " + v.ch : "")
+                       : "Now: no synth or role found for this track (see settings.py section 14)";
+}
+
+// One knob: the arc, the number (0-100 or the value as Live shows it, split into number and type) and the name
+function fillKnob(knob, it, label, n) {
+  var arc = knob.querySelector(".arc"), val = knob.querySelector(".val"), name = knob.querySelector(".nm"), unitEl = knob.querySelector(".unit");
+  unitEl.textContent = "";
+  if (!it || typeof it.v !== "number") {
+    knob.classList.add("none");                  // nothing mapped: shown empty
+    knob.classList.remove("locked");
+    arc.setAttribute("stroke-dasharray", "0 999");
+    val.textContent = "";
+    if (name.textContent !== (label || "–")) { name.textContent = label || "–"; fitLater(name); }
+    knob.title = "Macro " + n + " · empty";
+    return;
+  }
+  knob.classList.remove("none");
+  knob.classList.toggle("locked", !!it.locked);   // controlled by an outer rack's macro: greyed out
+  if (it.bi) {                                   // pan: the arc grows from the top centre to either side
+    var lo = Math.min(it.v, 0.5), hi = Math.max(it.v, 0.5);
+    arc.setAttribute("stroke-dasharray", Math.max(0.01, (hi - lo) * ARC_LEN) + " 999");
+    arc.setAttribute("stroke-dashoffset", String(-lo * ARC_LEN));
+  } else {
+    arc.setAttribute("stroke-dasharray", (it.v * ARC_LEN) + " 999");
+    arc.removeAttribute("stroke-dashoffset");
+  }
+  var num = String(Math.round(it.v * 100)), unit = "";
+  if (it.bi && it.text) num = String(it.text).replace(/\s+/g, "");   // pan as Live shows it: C, 25L, 50R
+  if (opts.knobNum === "live" && it.text && !it.bi) {
+    var pv = splitValue(it.text); num = pv[0]; unit = pv[1];
+    if (!unit && /rate/i.test(it.name || "") && /^\d+(\.\d+)?$/.test(num)) unit = num === "1" ? "bar" : "bars";   // synced rate
+  }
+  val.textContent = num;
+  val.setAttribute("y", unit ? "45" : "52");
+  val.style.fontSize = num.length <= 4 ? "" : num.length === 5 ? "20px" : num.length === 6 ? "17px" : "13px";
+  unitEl.textContent = unit;
+  unitEl.style.fontSize = unit.length <= 4 ? "" : unit.length <= 7 ? "13px" : "10px";
+  if (name.textContent !== label) { name.textContent = label; fitLater(name); }
+  knob.title = n + " · " + (it.name || label) + " · " + (it.text || "") + (it.locked ? " · locked: another macro controls it" : "");
+}
+
+// A knob name too long for its knob gets a smaller font (down to 65 %) instead of being cut off.
+// Measured once per new name, all together on the next frame.
+var fitQueue = [], fitRaf = null;
+function fitLater(node) {
+  fitQueue.push(node);
+  if (!fitRaf) fitRaf = requestAnimationFrame(function () {
+    fitRaf = null;
+    var q = fitQueue; fitQueue = [];
+    q.forEach(function (n) { n.style.fontSize = ""; });
+    var sizes = q.map(function (n) {                       // read everything first, then write
+      if (!n.isConnected || !n.clientWidth || n.scrollWidth <= n.clientWidth) return null;
+      return parseFloat(getComputedStyle(n).fontSize) * Math.max(0.65, n.clientWidth / n.scrollWidth);
+    });
+    q.forEach(function (n, i) { if (sizes[i]) n.style.fontSize = sizes[i].toFixed(1) + "px"; });
+  });
+}
+function refitAll() { document.querySelectorAll(".knob .nm").forEach(fitLater); }
+
+// ---------- rate macros, always visible ----------
+// Every macro of the knob panel's rack with "Rate" in its name: its time graphic and value at the top right,
+// whatever knob you turn. (Same graphics as next to the big value.)
+var rates = [], rateRaf = null;
+function showRates(m) {
+  var box = el("ratebox"), items = (m && m.items) || [], list = [];
+  items.forEach(function (it) {
+    if (it && it.name && /rate/i.test(it.name) && it.text && timeOf(it.name, it.text)) list.push(it);   // only real rates
+  });
+  var sig = list.map(function (it) { return it.name; }).join("|") + "@" + (m && m.owner);
+  if (box.dataset.sig !== sig) {                         // another rack or other rate macros: rebuild
+    box.dataset.sig = sig;
+    box.textContent = "";
+    rates = list.map(function () {
+      var row = document.createElement("div"); row.className = "rt";
+      var c = document.createElement("canvas");
+      var tx = document.createElement("div"); tx.className = "tx";
+      tx.innerHTML = '<span class="nm"></span><span class="v"></span>';
+      row.appendChild(c); row.appendChild(tx); box.appendChild(row);
+      return { row: row, c: c, nm: tx.firstChild, v: tx.lastChild, info: null };
+    });
+  }
+  list.forEach(function (it, i) {
+    var r = rates[i], info = timeOf(it.name, it.text);
+    r.nm.textContent = it.name;
+    var pv = splitValue(it.text), unit = pv[1];
+    if (!unit && /^\d+(\.\d+)?$/.test(pv[0])) unit = pv[0] === "1" ? "bar" : "bars";
+    r.v.innerHTML = "";
+    r.v.appendChild(document.createTextNode(pv[0]));
+    if (unit) { var sm = document.createElement("small"); sm.textContent = unit; r.v.appendChild(sm); }
+    if (info) info.t0 = r.info && r.info.kind === info.kind ? r.info.t0 : performance.now();
+    r.info = info;
+    r.c.style.visibility = info ? "visible" : "hidden";
+  });
+  if (rates.length && !rateRaf) rateRaf = requestAnimationFrame(rateFrame);
+}
+function rateFrame(now) {
+  rateRaf = null;
+  if (!rates.length) return;
+  if (now - (rateFrame.last || 0) < FRAME_MS) { rateRaf = requestAnimationFrame(rateFrame); return; }
+  rateFrame.last = now;
+  rates.forEach(function (r) {
+    if (!r.info) return;
+    var c = r.c, view = c.ownerDocument.defaultView || window, dpr = view.devicePixelRatio || 1;
+    var w = c.clientWidth, h = c.clientHeight;
+    if (!w || !h) return;
+    if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+    drawTime(c.getContext("2d"), w, h, dpr, (now - r.info.t0) / 1000, r.info);
+  });
+  rateRaf = requestAnimationFrame(rateFrame);
+}
+
+// ---------- gain reduction (A8 GR Post devices) ----------
+// Each device sends "<track name> <dB>" ~15 times a second while it changes. A: a meter at the end of the
+// Dynamics (Returns page: Sidechain) group for the track the knobs show. B: a bar under the value while you
+// turn a Dynamics macro. C: an orange strip next to each button's level meter.
+var GR_TICKS = [0, -3, -6, -12, -20], grMap = {}, grRaf = null, grGroup = null, grFocus = null, grFocusT = 0;
+function grPos(db) { return Math.min(1, Math.pow(Math.max(0, -db) / 20, 0.6)); }   // more room for small amounts
+function grKey(n) { return stripLetter(String(n || "")); }
+function setGR(track, db) {
+  var k = grKey(track), now = performance.now(), g = grMap[k] || (grMap[k] = { v: 0, shown: 0, peak: 0, peakT: 0 });
+  g.v = Math.min(0, Number(db) || 0); g.t = now;
+  if (g.v <= g.peak) { g.peak = g.v; g.peakT = now; }
+  if (!grRaf) { grLast = now; grRaf = requestAnimationFrame(grFrame); }
+}
+var grLast = 0;
+// write a style only when it changed (fewer page recalculations); the last value is kept on the element
+function grSet(node, prop, val) {
+  if (!node) return;
+  var w = node._w || (node._w = {});
+  if (w[prop] === val) return;
+  w[prop] = val;
+  if (prop === "text") node.textContent = val; else node.style[prop] = val;
+}
+function grFrame(now) {
+  grRaf = null;
+  var dt = Math.min(0.1, (now - grLast) / 1000), busy = false;
+  grLast = now;
+  Object.keys(grMap).forEach(function (k) {
+    var g = grMap[k];
+    if (now - g.t > 3000) { delete grMap[k]; busy = true; return; }   // that device stopped sending (removed, off)
+    var before = g.shown;
+    g.shown = g.v < g.shown ? g.v : Math.min(g.v, g.shown + 25 * dt);   // falls at once, recovers 25 dB/s
+    if (now - g.peakT > 1500 && g.peak < g.shown) g.peak = Math.min(g.shown, g.peak + 12 * dt);
+    if (g.shown !== before || g.peak < g.shown - 0.05 || now - g.peakT <= 1500) busy = true;
+  });
+  // A: the macro panel's group
+  if (grGroup) {
+    var ga = opts.grA ? grMap[grKey(macroOwner)] : null;
+    if (grGroup.classList.contains("hasgr") !== !!ga) grGroup.classList.toggle("hasgr", !!ga);
+    if (ga) {
+      var gm = grGroup.querySelector(".grm");
+      grSet(gm.querySelector(".tube b"), "transform", "scaleY(" + grPos(ga.shown).toFixed(3) + ")");
+      grSet(gm.querySelector(".tube s"), "transform", "translateY(" + (grPos(ga.peak) * 100).toFixed(1) + "%)");
+      grSet(gm.querySelector(".tube s"), "opacity", ga.peak < -0.3 ? "0.9" : "0");
+      grSet(gm.querySelector(".rd .n"), "text", ga.shown > -0.05 ? "0.0" : ga.shown.toFixed(1));
+    }
+  }
+  // B: under the value while a Dynamics macro is being turned
+  var bar = el("grbar"), gb = opts.grB && grFocus && grMap[grKey(grFocus)];
+  var showB = !!(gb && now - grFocusT < 4000 && !el("stage").classList.contains("idle"));
+  if (bar.classList.contains("show") !== showB) bar.classList.toggle("show", showB);
+  if (showB) {
+    grSet(bar.querySelector(".t b"), "transform", "scaleX(" + grPos(gb.shown).toFixed(3) + ")");
+    grSet(bar.querySelector(".t s"), "transform", "translateX(-" + (grPos(gb.peak) * 100).toFixed(1) + "%)");
+    grSet(bar.querySelector(".t s"), "opacity", gb.peak < -0.3 ? "0.9" : "0");
+    grSet(bar.querySelector(".n"), "text", (gb.shown > -0.05 ? "0.0" : gb.shown.toFixed(1)) + " dB");
+    busy = true;                                   // hides itself after 4 s
+  }
+  // C: the buttons
+  var cols = document.querySelectorAll(el("bottom").classList.contains("strips") ? "#chs .chs" : "#map .col");
+  for (var i = 0; i < cols.length; i++) {
+    var gc = opts.grC ? grMap[grKey(cols[i].dataset.track)] : null;
+    if (cols[i].classList.contains("hasgr") !== !!gc) cols[i].classList.toggle("hasgr", !!gc);
+    if (gc) grSet(cols[i].querySelector(".grs b"), "transform", "scaleY(" + grPos(gc.shown).toFixed(3) + ")");
+  }
+  if (busy) grRaf = requestAnimationFrame(grFrame);
+}
+
+// ---------- fader legend ----------
+function legendText(f) {
+  if (!f) return "";
+  if (f.k === "vol") return "Volume";
+  if (f.k === "rvol") return "Return volume";
+  if (f.k === "macro") return "Return macro " + f.n;
+  if (f.from && f.to) return stripLetter(f.from) + " → " + stripLetter(f.to);
+  if (f.from) return stripLetter(f.from) + " → sends";
+  return "Send → " + stripLetter(f.to);
+}
+function showLegend(st) {
+  var box = el("legend"), fs = st.faders || [], cols = st.cols || [];
+  box.textContent = "";
+  box.style.display = fs.length ? "" : "none";
+  var i = 0;
+  while (i < fs.length) {
+    var key = JSON.stringify(fs[i]), j = i + 1;
+    while (j < fs.length && JSON.stringify(fs[j]) === key && !divBefore(cols, j)) j++;
+    if (i > 0 && divBefore(cols, i)) { var g = document.createElement("div"); g.className = "gap"; box.appendChild(g); }
+    var f = fs[i], seg = document.createElement("div");
+    seg.className = "seg";
+    seg.dataset.a = i; seg.dataset.z = j;
+    seg.style.flex = (j - i) + " " + (j - i) + " 0";
+    var col = f.k === "send" ? (f.rgb || "var(--pc, var(--accent))") : f.k === "vol" ? "" : "var(--pc, var(--accent))";
+    if (col) seg.style.setProperty("--sc", col);
+    var ic = document.createElement("span"); ic.className = "ic"; ic.textContent = f.k === "send" ? "◢" : "▮";
+    var tx = document.createElement("span"); tx.className = "tx"; tx.textContent = legendText(f);
+    seg.appendChild(ic); seg.appendChild(tx);
+    if (f.locked) { var lk = document.createElement("span"); lk.className = "lk"; lk.textContent = "LOCKED"; seg.appendChild(lk); }
+    seg.title = "Faders " + (i + 1) + (j - i > 1 ? "–" + j : "") + ": " + legendText(f);
+    box.appendChild(seg);
+    i = j;
+  }
+  var tg = retToggle(st);
+  if (tg) box.appendChild(tg);
+}
+
+// The RET button at the end of the fader legend on the Perform and Track pages (and R on the keyboard) steps
+// through that page's return columns: all ("!" and "#") -> only "!" -> none (all 8 columns tracks) -> all.
+// On the Alias 8 too. Each page on its own; the script skips a state that would look the same.
+var RET_LABEL = { all: "RET all", "!": "RET !", none: "RET off" };
+var RET_TITLE = { all: "all marked returns (! and #)", "!": "only the ! returns", none: "no return columns (8 tracks)" };
+function retPageKey(st) {
+  var name = st && PAGES[st.page] ? PAGES[st.page][0] : "", key = name.toLowerCase();
+  return st && st.has_rets && (key === "perform" || key === "track") ? key : null;
+}
+function retMode(st, key) {
+  if (st.rets_mode && st.rets_mode[key]) return st.rets_mode[key];
+  return st.rets_hidden && st.rets_hidden[key] ? "none" : "all";
+}
+var retBusy = false;
+function cycleReturns() {
+  var key = retPageKey(lastState);
+  if (!key || retBusy) return;
+  retBusy = true;
+  sendControl({ cmd: "returns", page: key, cycle: true }).then(function () { setTimeout(function () { retBusy = false; }, 300); });
+}
+// S / a click on the rack name: the knobs show the next rack on the track (an instrument rack and an effect rack ...)
+function sendControl(obj) {
+  return fetch("/control", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(obj) })
+    .then(function (r) {   // an older scribble_strip.py refuses commands it doesn't know: say so instead of doing nothing
+      if (r && r.status === 400) notice("Restart the Scribble Strip (Start Scribble Strip.command) - it doesn't know this command yet");
+    })
+    .catch(function () { notice("Can't reach the Scribble Strip - start it again"); });
+}
+function nextRack() { sendControl({ cmd: "nextrack" }); }
+function prevRack() {                            // ← : the rack before (around to the last)
+  var m = lastState && lastState.macros;
+  if (!m || !(m.rack_count > 1)) { nextRack(); return; }   // (one rack: the script says so)
+  sendControl({ cmd: "setrack", i: (m.rack_n - 2 + m.rack_count) % m.rack_count });
+}
+
+function retToggle(st) {
+  var key = retPageKey(st);
+  if (!key) return null;
+  var mode = retMode(st, key);
+  var b = document.createElement("button");
+  b.type = "button";
+  b.className = "rtog" + (mode === "none" ? " off" : "");
+  b.textContent = RET_LABEL[mode] || "RET";
+  b.title = "Now: " + (RET_TITLE[mode] || mode) + " on the " + PAGES[st.page][0] + " page. Click or press R for the next (all → ! → off).";
+  b.addEventListener("click", cycleReturns);
+  return b;
+}
+// Portrait on Perform and Mix: channel strips instead of the knob rows and the button row
+function stripMode() { return perfOn && el("app").classList.contains("portrait"); }
+function applySplit() { el("bottom").classList.toggle("strips", stripMode()); }
+// the button row has a divider where the return columns begin; the legend splits there too
+function divBefore(cols, j) {
+  var c = cols[j], prev = cols[j - 1];
+  return !!(c && prev && c.kind === "return" && prev.kind !== "return");
+}
+
+// ---------- channel strips (portrait, Perform and Mix) ----------
+// Each column: its two knobs on the left, a tall bar on the right (volume or send, level meter, gain reduction,
+// S = solo, red dot = armed), the name below, the controller column number top left. Grey = muted,
+// white outline = selected. Rebuilt only when the columns change; otherwise the values are updated in place.
+function legendRow(fs, cols, a, b) {
+  var row = document.createElement("div"); row.className = "leg";
+  var i = a;
+  while (i < b) {
+    var key = JSON.stringify(fs[i] || null), j = i + 1;
+    while (j < b && JSON.stringify(fs[j] || null) === key) j++;
+    var f = fs[i] || { k: "vol" }, seg = document.createElement("div");
+    seg.className = "seg"; seg.style.flex = (j - i) + " " + (j - i) + " 0";
+    var col = f.k === "send" ? (f.rgb || "var(--pc, var(--accent))") : f.k === "vol" ? "" : "var(--pc, var(--accent))";
+    if (col) seg.style.setProperty("--sc", col);
+    seg.innerHTML = '<span class="ic">' + (f.k === "send" ? "◢" : "▮") + '</span><span class="tx"></span>';
+    seg.querySelector(".tx").textContent = legendText(f);
+    if (f.locked) { var lk = document.createElement("span"); lk.className = "lk"; lk.textContent = "LOCKED"; seg.appendChild(lk); }
+    row.appendChild(seg);
+    i = j;
+  }
+  return row;
+}
+function showStrips(st) {
+  var cm = st.colmacros || [], cols = st.cols || [], box = el("chs"), fs = st.faders || [];
+  var sig = "strips" + JSON.stringify(st.rets_mode || st.rets_hidden || {}) + JSON.stringify([cols.map(function (c) { return [c.kind, c.name, c.rgb, c.kids, c.focus]; }),
+    cm.map(function (c) { return c && [c.owner, c.knobs.map(function (k) { return k && k.name; })]; }), fs, st.layer || ""]);
+  if (sig !== lastPerfSig || !box.firstChild) {
+    lastPerfSig = sig;
+    box.textContent = "";
+    pknobs = [[], []];
+    for (var h = 0; h < 2; h++) {
+      var lr = legendRow(fs, cols, h * 4, h * 4 + 4);
+      if (h === 1) { var tg2 = retToggle(st); if (tg2) lr.appendChild(tg2); }
+      box.appendChild(lr);
+      var half = document.createElement("div"); half.className = "half";
+      for (var i = h * 4; i < h * 4 + 4; i++) {
+        var c = cols[i] || { kind: "empty" }, sp = document.createElement("div");
+        sp.className = "chs" + (c.kind === "empty" || !cm[i] ? " empty" : "");
+        sp.style.setProperty("--c", btnColour(c.rgb));
+        setBlend(sp, c);
+        sp.dataset.track = c.kind === "empty" ? "" : (c.name || "");
+        sp.innerHTML = '<span class="snum">' + (i + 1) + '</span><div class="sk"></div>' +
+          '<div class="sbar"><div class="fill"></div><i class="zero"></i><div class="grs"><b></b></div><div class="mtr"><b></b><s></s></div></div>' +
+          '<div class="sname"></div>';
+        for (var r = 0; r < 2; r++) {
+          var k = makeKnob();
+          sp.querySelector(".sk").appendChild(k);
+          pknobs[r][i] = k;
+          if (c.kind !== "empty" && cm[i]) { k.style.setProperty("--gs", c.rgb || "#888888"); k.dataset.owner = cm[i].owner; }
+          else k.classList.add("none", "gone");
+        }
+        var nm = sp.querySelector(".sname");
+        nm.textContent = c.kind === "empty" ? "–" : stripLetter(c.name);
+        if (c.kind === "return") { var tg = document.createElement("span"); tg.className = "tag"; tg.textContent = "RET"; nm.appendChild(tg); }
+        half.appendChild(sp);
+      }
+      box.appendChild(half);
+    }
+  }
+  // values, every update
+  var strips = box.querySelectorAll(".chs");
+  for (var n = 0; n < strips.length; n++) {
+    var cc = cols[n] || { kind: "empty" }, s2 = strips[n];
+    if (cc.kind === "empty") continue;
+    s2.classList.toggle("sel", !!cc.selected);
+    s2.classList.toggle("muted", !!cc.muted);
+    s2.classList.toggle("send", !!cc.send);
+    s2.classList.toggle("layer", !!(st.layer && cc.kind === "return" && cc.name === st.layer));
+    s2.style.setProperty("--v", typeof cc.vol === "number" ? cc.vol.toFixed(3) : "0");
+    var bar = s2.querySelector(".sbar"), so = bar.querySelector(".solo"), ar = bar.querySelector(".arm");
+    if (cc.soloed && !so) { so = document.createElement("span"); so.className = "solo"; so.textContent = "S"; bar.appendChild(so); }
+    if (!cc.soloed && so) so.remove();
+    if (cc.armed && !ar) { ar = document.createElement("span"); ar.className = "arm"; bar.appendChild(ar); }
+    if (!cc.armed && ar) ar.remove();
+    s2.title = stripLetter(cc.name) + (typeof cc.vol === "number" ? (cc.send ? " · send " : " · volume ") + Math.round(cc.vol * 100) + " %" : "");
+    for (var rr = 0; rr < 2; rr++) {
+      var kk = pknobs[rr][n];
+      if (kk && cm[n] && !kk.classList.contains("gone")) { var it = cm[n].knobs[rr]; fillKnob(kk, it, it ? it.name : "", it ? it.n : ""); }
+    }
+  }
+}
+
+// ---------- Perform page: macro 1 and 2 of every column, straight above its button ----------
+var pknobs = [[], []], perfOn = false, lastPerf = null, lastPerfSig = null;
+function showPerform(st) {
+  var cm = st.colmacros;
+  perfOn = !!(cm && cm.length);
+  lastPerf = perfOn ? st : null;
+  el("pgrid").classList.toggle("show", perfOn);
+  el("panels").classList.toggle("perf", perfOn);
+  if (!perfOn) { lastPerfSig = null; return; }
+  if (stripMode()) { showStrips(st); return; }
+  var grid = el("pgrid");
+  // same columns and macros as last time: only update the values (rebuilding 16 knobs on every update
+  // restarted their animations and cost time)
+  var sig = "rows" + JSON.stringify([(st.cols || []).map(function (c) { return [c.kind, c.name, c.rgb]; }),
+    cm.map(function (c) { return c && [c.owner, c.knobs.map(function (k) { return k && k.name; })]; })]);
+  if (sig === lastPerfSig && pknobs[0].length) {
+    for (var rr = 0; rr < 2; rr++) for (var ii = 0; ii < pknobs[rr].length; ii++) {
+      var kk = pknobs[rr][ii];
+      if (kk && cm[ii] && !kk.classList.contains("gone")) { var it2 = cm[ii].knobs[rr]; fillKnob(kk, it2, kk.dataset.lab || "", it2 ? it2.n : ""); }
+    }
+    return;
+  }
+  lastPerfSig = sig;
+  grid.textContent = "";
+  pknobs = [[], []];
+  for (var r = 0; r < 2; r++) {
+    // the name most columns share goes once at the start of the row; a column with another name shows its own
+    var counts = {}, common = "", best = 0;
+    cm.forEach(function (c, i) {
+      var it = c && c.knobs && c.knobs[r];
+      if (it && st.cols[i] && st.cols[i].kind === "track") { counts[it.name] = (counts[it.name] || 0) + 1;
+        if (counts[it.name] > best) { best = counts[it.name]; common = it.name; } }
+    });
+    var cap = document.createElement("div");
+    cap.className = "pcap";
+    cap.textContent = (r === 0 ? "Top knobs" : "Second knobs") + (common ? " · " + common : "");   // Perform: Filter Freq / Res; Mix: Pan / Width
+    grid.appendChild(cap);
+    var row = document.createElement("div");
+    row.className = "prow";
+    (st.cols || []).forEach(function (c, i) {
+      var prev = st.cols[i - 1];
+      if (c.kind === "return" && prev && prev.kind !== "return") {
+        var d = document.createElement("div"); d.className = "divider"; row.appendChild(d);
+      }
+      var cell = document.createElement("div");
+      cell.className = "pcell";
+      var k = makeKnob();
+      if (c.kind === "empty" || !cm[i]) {
+        k.classList.add("none", "gone");
+      } else {
+        cell.classList.add("tint");
+        cell.style.setProperty("--cc", c.rgb || "#888888");
+        k.style.setProperty("--gs", c.rgb || "#888888");
+        var it = cm[i].knobs[r];
+        var lab = it ? it.name : "";
+        k.dataset.lab = lab === common ? "" : lab;
+        fillKnob(k, it, k.dataset.lab, it ? it.n : "");
+        k.dataset.owner = cm[i].owner;
+      }
+      cell.appendChild(k);
+      row.appendChild(cell);
+      pknobs[r][i] = k;
+    });
+    grid.appendChild(row);
+  }
+}
+// highlight the knob being turned ([macro number, owner] from the script)
+function activeKnob(mac, msg) {
+  knobs.concat(pknobs[0], pknobs[1]).forEach(function (k) { if (k) { k.classList.remove("active"); k.classList.remove("picking"); } });
+  clearTimeout(activeTimer);
+  var k = null;
+  if (perfOn && msg && msg.cell && (msg.cell[1] === "k1" || msg.cell[1] === "k2")) {
+    k = pknobs[msg.cell[1] === "k1" ? 0 : 1][msg.cell[0]];
+  } else if (mac && knobs.length && mac[1] === macroOwner) {
+    k = knobs[mac[0] - 1];
+  }
+  if (!k) return;
+  k.classList.add("active");
+  if (msg && msg.pickup && typeof msg.control === "number" && typeof msg.target === "number") {
+    showPickup(k, msg.control, msg.target);
+    k.classList.add("picking");
+  }
+  activeTimer = setTimeout(function () { k.classList.remove("active"); k.classList.remove("picking"); }, ACTIVE_MS);
+}
+
+// An arc segment from a to b (0-1 of the knob's travel)
+function seg(circle, a, b, color) {
+  a = Math.max(0, Math.min(1, a)); b = Math.max(0, Math.min(1, b));
+  var len = Math.max(0, b - a) * ARC_LEN;
+  circle.setAttribute("stroke-dasharray", len + " 9999");
+  circle.setAttribute("stroke-dashoffset", String(-a * ARC_LEN));
+  circle.setAttribute("stroke", color);
+  circle.style.visibility = len < 0.5 ? "hidden" : "visible";
+}
+// Waiting for pickup: knob below the value -> yellow from 0 to the knob, group colour from the knob to the value;
+// knob above the value -> group colour from 0 to the value, yellow from the value up to the knob.
+function showPickup(k, c, t) {
+  var yellow = getComputedStyle(document.documentElement).getPropertyValue("--warn").trim() || "#f2c12e";
+  var p1 = k.querySelector(".p1"), p2 = k.querySelector(".p2");
+  var reg = getComputedStyle(k.querySelector(".arc")).stroke || "#ffffff";   // the knob's own group colour
+  if (c < t) { seg(p1, 0, c, yellow); seg(p2, c, t, reg); }
+  else { seg(p1, 0, t, reg); seg(p2, t, c, yellow); }
+}
+
+// ---------- level meters ----------
+// The script sends levels ~10 times a second; between packets the bar falls smoothly (rises at once),
+// and a peak line holds for a second, like a hardware meter.
+var METER_FALL = 1.6, PEAK_HOLD = 1000, PEAK_FALL = 0.6;
+var mTarget = [], mShown = [], mPeak = [], mPeakT = [], mLast = 0, mRunning = false;
+var metersSeen = false;
+function setMeters(levels) {
+  var now = performance.now();
+  if (!metersSeen) { metersSeen = true; el("map").classList.remove("nometers"); }
+  (levels || []).forEach(function (v, i) {
+    mTarget[i] = typeof v === "number" ? Math.max(0, Math.min(1, v)) : 0;
+    if (mTarget[i] > (mShown[i] || 0)) mShown[i] = mTarget[i];
+    if (mTarget[i] >= (mPeak[i] || 0)) { mPeak[i] = mTarget[i]; mPeakT[i] = now; }
+  });
+  if (!mRunning) { mRunning = true; mLast = now; requestAnimationFrame(meterFrame); }
+}
+function meterFrame(now) {
+  var dt = Math.min(0.1, (now - mLast) / 1000), busy = false;
+  mLast = now;
+  var bars = document.querySelectorAll(el("bottom").classList.contains("strips") ? "#chs .chs .mtr" : "#map .col .mtr");
+  for (var i = 0; i < bars.length; i++) {
+    var shown = Math.max(mTarget[i] || 0, (mShown[i] || 0) - METER_FALL * dt);
+    mShown[i] = shown;
+    if (now - (mPeakT[i] || 0) > PEAK_HOLD) mPeak[i] = Math.max(shown, (mPeak[i] || 0) - PEAK_FALL * dt);
+    var pk = mPeak[i] || 0;
+    grSet(bars[i].firstChild, "clipPath", "inset(" + ((1 - shown) * 100).toFixed(1) + "% 0 0 0)");
+    grSet(bars[i].lastChild, "transform", "translateY(" + ((1 - pk) * 100).toFixed(1) + "%)");
+    grSet(bars[i].lastChild, "opacity", pk > 0.02 ? "0.9" : "0");
+    if (shown > 0.001 || pk > 0.001) busy = true;
+  }
+  if (busy) requestAnimationFrame(meterFrame); else mRunning = false;
+}
+
+// ---------- connection ----------
+function connect() {
+  var es = new EventSource("/events");
+  es.onopen = function () { el("dot").className = "on"; el("connText").textContent = "connected"; el("conn").classList.add("ok"); };
+  es.onmessage = function (e) {
+    var msg;
+    try { msg = JSON.parse(e.data); } catch (err) { return; }
+    if (msg.type === "meters") { setMeters(msg.levels); return; }
+    if (msg.type === "gr") { setGR(msg.track, msg.gr); return; }
+    if (msg.type === "state") showState(msg); else show(msg);
+  };
+  es.onerror = function () { el("dot").className = ""; el("connText").textContent = "viewer stopped – start it again"; el("conn").classList.remove("ok"); };
+}
+
+// ---------- options: layout (L), tint (B), full screen, folding ----------
+function store(k, v) { try { localStorage.setItem(k, v); } catch (err) {} }
+function load(k) { try { return localStorage.getItem(k); } catch (err) { return null; } }
+
+var tint = load("a8tint") === "on";
+function applyTint() {
+  rootClass("tint", tint);
+}
+function toggleTint() { tint = !tint; store("a8tint", tint ? "on" : "off"); applyTint(); syncPanel(); }
+
+var LAYOUTS = ["auto", "landscape", "portrait"];
+var LAYOUT_TITLE = { auto: "Layout: auto", landscape: "Layout: landscape", portrait: "Layout: portrait" };
+var layout = load("a8layout") || "auto";
+function applyLayout() {
+  fitHeadsLater();
+  placeSideLater();
+  var app = document.getElementById("app") || (pipWin && pipWin.document.getElementById("app"));
+  if (!app) return;
+  var w = app.ownerDocument.defaultView;
+  var portrait = layout === "portrait" || (layout === "auto" && w.innerHeight > w.innerWidth * 1.05);
+  var was = app.classList.contains("portrait");
+  app.classList.toggle("portrait", portrait);
+  if (was !== portrait && lastState) { lastPerfSig = null; showState(lastState); }
+  // just a symbol: the shape of the layout in use, with a small A when it's chosen automatically
+  var lb = el("layoutBtn");
+  lb.innerHTML = (portrait ? "▯" : "▭") + (layout === "auto" ? '<sup class="la">A</sup>' : "");
+  lb.title = LAYOUT_TITLE[layout] + (layout === "auto" ? (portrait ? " (now portrait)" : " (now landscape)") : "") + " · click or key L";
+}
+function nextLayout() {
+  layout = LAYOUTS[(LAYOUTS.indexOf(layout) + 1) % LAYOUTS.length];
+  store("a8layout", layout);
+  applyLayout();
+  syncPanel();
+}
+
+function onKey(e) {
+  if (e.target && /input|textarea|select/i.test(e.target.tagName || "")) return;
+  var k = (e.key || "").toLowerCase();
+  if (k === "l") nextLayout();
+  else if (k === "b") toggleTint();
+  else if (k === "s" || k === "arrowright") nextRack();
+  else if (k === "arrowleft") prevRack();
+  else if (k === "," || k === ";") toggleSettings();
+  else if (k === "r") cycleReturns();
+  else if (k === "escape") toggleSettings(false);
+}
+
+// ---------- settings window (,) ----------
+// Saved in this browser only. Each switch is a class on the page; see "what the settings switch off" in the styles.
+var OPT_DEFAULT = { pageCol: true, pageFrame: true, pageStrip: true, kindCol: true, kindFrame: true, rackStrip: true, nestFrame: true, knobNum: "pct", qorder: "rows", hl: true, pick: true, pmeter: true, ownSq: true, ownCol: true, tviz: true, eq: true, ratebox: true, grA: true, grC: true, grB: false, meters: true, peak: true, ov: true, notice: true, art: true, skin: true, edge: true, sideline: true, role: true, midiCh: true };
+var opts = (function () { var o = {}; try { o = JSON.parse(load("a8opts") || "{}") || {}; } catch (err) {}
+  for (var k in OPT_DEFAULT) if (!(k in o)) o[k] = OPT_DEFAULT[k]; return o; })();
+var OPT_CLASS = { pageCol: "no-pagecol", pageFrame: "no-pageframe", pageStrip: "no-pagestrip", kindCol: "no-kindcol", kindFrame: "no-kindframe", rackStrip: "no-rackstrip", nestFrame: "no-nestframe", ownSq: "no-ownsq", ownCol: "no-owncol", hl: "no-hl", pick: "no-pick", pmeter: "no-pmeter", tviz: "no-tviz", eq: "no-eq", ratebox: "no-ratebox", grA: "no-grA", grC: "no-grC", grB: "no-grB", meters: "no-meters", peak: "no-peak", ov: "no-ov", notice: "no-notice", art: "no-art", skin: "no-skin", edge: "no-edge", sideline: "no-sideline", role: "no-role", midiCh: "no-midich" };
+var OPT_BOX = { pageCol: "optPageCol", pageFrame: "optPageFrame", pageStrip: "optPageStrip", kindCol: "optKindCol", kindFrame: "optKindFrame", rackStrip: "optRackStrip", nestFrame: "optNestFrame", ownSq: "optOwnSq", ownCol: "optOwnCol", hl: "optHl", pick: "optPick", pmeter: "optPmeter", tviz: "optTviz", eq: "optEq", ratebox: "optRatebox", grA: "optGrA", grC: "optGrC", grB: "optGrB", meters: "optMeters", peak: "optPeak", ov: "optOv", notice: "optNotice", art: "optArt", skin: "optSkin", edge: "optEdge", sideline: "optSideline", role: "optRole", midiCh: "optMidiCh" };
+function applyOpts() {
+  for (var k in OPT_CLASS) rootClass(OPT_CLASS[k], !opts[k]);
+  rootClass("qhalves", opts.qorder === "halves");
+  if (lastMacros) showMacros(lastMacros);
+  if (lastPerf) showPerform(lastPerf);
+}
+function syncPanel() {
+  for (var k in OPT_BOX) el(OPT_BOX[k]).checked = !!opts[k];
+  el("optKnobNum").value = opts.knobNum;
+  el("optQorder").value = opts.qorder || "rows";
+  showVoiceInfo();
+  el("optTint").checked = tint;
+  el("optLayout").value = layout;
+  var rt = el("optRackTap"), has = !!(lastState && typeof lastState.rack_tap === "boolean");
+  rt.disabled = !has;                            // (an older script doesn't know it)
+  rt.checked = has && lastState.rack_tap;
+}
+function toggleSettings(show) {
+  var p = el("setPanel");
+  if (show === undefined) show = !p.classList.contains("show");
+  p.classList.toggle("show", show);
+  el("setBtn").setAttribute("aria-pressed", show ? "true" : "false");
+  if (show) syncPanel();
+}
+Object.keys(OPT_BOX).forEach(function (k) {
+  el(OPT_BOX[k]).addEventListener("change", function (e) { opts[k] = e.target.checked; store("a8opts", JSON.stringify(opts)); applyOpts(); });
+});
+el("optKnobNum").addEventListener("change", function (e) { opts.knobNum = e.target.value; store("a8opts", JSON.stringify(opts)); applyOpts(); });
+el("optQorder").addEventListener("change", function (e) { opts.qorder = e.target.value; store("a8opts", JSON.stringify(opts)); applyOpts(); });
+el("optTint").addEventListener("change", function (e) { if (e.target.checked !== tint) toggleTint(); });
+el("optLayout").addEventListener("change", function (e) { layout = e.target.value; store("a8layout", layout); applyLayout(); });
+// settings tabs (the last one used is remembered)
+function showSetTab(name) {
+  var root = el("setPanel"), found = false;
+  Array.prototype.forEach.call(root.querySelectorAll(".tabs button"), function (b) {
+    var on = b.dataset.tab === name; b.classList.toggle("on", on); b.setAttribute("aria-selected", on ? "true" : "false"); found = found || on;
+  });
+  if (!found) { name = "knobs"; root.querySelector('.tabs button[data-tab="knobs"]').classList.add("on"); }
+  Array.prototype.forEach.call(root.querySelectorAll(".tabpage"), function (pg) { pg.classList.toggle("on", pg.dataset.tab === name); });
+  store("a8settab", name);
+}
+Array.prototype.forEach.call(document.querySelectorAll("#setPanel .tabs button"), function (b) {
+  b.addEventListener("click", function () { showSetTab(b.dataset.tab); });
+});
+showSetTab(load("a8settab") || "knobs");
+el("optRackTap").addEventListener("change", function (e) { sendControl({ cmd: "racktap", on: e.target.checked }); });   // a setting in the script
+el("rackname").addEventListener("click", function () { if (el("rackname").classList.contains("many")) nextRack(); });
+el("setBtn").addEventListener("click", function () { toggleSettings(); });
+el("setClose").addEventListener("click", function () { toggleSettings(false); });
+applyOpts();
+document.addEventListener("keydown", onKey);
+document.addEventListener("dblclick", function (e) {
+  if (e.target.closest && (e.target.closest("button") || e.target.closest("#setPanel"))) return;
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(function () {});
+  else document.exitFullscreen();
+});
+el("layoutBtn").addEventListener("click", nextLayout);
+window.addEventListener("resize", applyLayout);
+try { localStorage.removeItem("a8theme"); } catch (err) {}   // the light / system theme is gone
+applyTint();
+applyLayout();
+
+// "Float on top": Chrome and Edge can open a page in a small picture-in-picture window that stays
+// on top of every other app. The whole viewer moves into it, and back when that window is closed.
+if ("documentPictureInPicture" in window) {
+  el("float").hidden = false;
+  el("float").addEventListener("click", floatOnTop);
+  el("unfloat").addEventListener("click", function () { if (pipWin) pipWin.close(); });
+}
+function floatOnTop() {
+  if (pipWin) return;
+  documentPictureInPicture.requestWindow({ width: 760, height: 480 }).then(function (win) {
+    pipWin = win;
+    var d = win.document;
+    d.title = "Alias 8 Status";
+    Array.prototype.forEach.call(document.querySelectorAll("style"), function (st) { d.head.appendChild(st.cloneNode(true)); });
+    d.documentElement.style.cssText = document.documentElement.style.cssText;   // page colour
+    d.documentElement.className = document.documentElement.className;           // tint
+    d.body.classList.add("pip");
+    d.body.appendChild(document.getElementById("app"));
+    el("floating").classList.add("show");
+    d.addEventListener("keydown", onKey);
+    win.addEventListener("resize", applyLayout);
+    applyLayout();
+    win.addEventListener("pagehide", function () {
+      document.body.insertBefore(d.getElementById("app"), document.getElementById("floating"));
+      document.getElementById("floating").classList.remove("show");
+      pipWin = null;
+      applyLayout();
+    });
+  }).catch(function (err) { console.log("Float on top not possible:", err); });
+}
+
+connect();
+</script>
+</body>
+</html>
