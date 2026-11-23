@@ -36,3 +36,7 @@ Everything the script writes to Live's status bar is also sent to a small window
 
 How it works: the script sends each message as a small JSON packet over UDP (`{"type": "message", "text": "...", "page": 2, ...}`), and the controller state whenever it changes (`{"type": "state", "page": 1, "cols": [...], "macros": ..., "tracks": [...], "returns": [...]}`), to port 9877 on this computer; `scribble_strip.py` receives them and passes them to the browser page. Nothing is sent anywhere else. Settings: section 12 of `settings.py` (`STATUS_MIRROR`, `STATUS_MIRROR_HOST`, `STATUS_MIRROR_PORT`). To show it on another computer, set `STATUS_MIRROR_HOST` to that computer's IP address and `LISTEN_HOST = "0.0.0.0"` in `scribble_strip.py` there. If the viewer isn't running, the messages are simply dropped.
 
+
+## License
+
+MIT – see `LICENSE`. The pictures in `synths/` were made with Midjourney.
