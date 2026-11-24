@@ -1,6 +1,6 @@
 # Scribble Strip
 
-A big-text window that shows what your controller is doing in Ableton Live: the track, the parameter and its value, the rack's macros, sends, meters and a picture of the synth. It listens to a Live remote script (today: [alias8-live](https://github.com/nygardsvulkanen/alias8-live), the Livid Alias 8) over UDP and runs in any browser.
+A big-text window that shows what your controller is doing in Ableton Live: the track, the parameter and its value, the rack's macros, sends, meters and a picture of the synth. It listens to a Live remote script (today: [alias8-scribble](https://github.com/nygardsvulkanen/alias8-scribble), the Livid Alias 8) over UDP and runs in any browser.
 
 <p align="center">
   <img src="screenshots/sh4d.jpg" width="32%" alt="Turning Cutoff on a Roland SH-4d bass track">

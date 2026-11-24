@@ -9,7 +9,7 @@ Owner: Daniel (writes in Swedish; answer in Swedish, keep code/comments/docs in 
 - `synths/*.jpg` – Daniel's own 1200×1920 pictures (protein, sh4d, s4, modelcycles, gr1, returns, bus, audio, externalinstrument, abletoninstrument).
 - `Start Scribble Strip.command` – double-click starter (macOS).
 
-## Protocol (sender today: ../alias8-live)
+## Protocol (sender today: ../alias8-scribble, script folder Alias8_Live)
 - `{type:"message", text:"Alias 8: <track> - <macro> <value>", control, target, pickup, macro:[n, owner], targets}` per knob/fader step.
 - `{type:"state", page, pages, cols:[{name, rgb, kind, selected, vol, …}], macros:{kind, groups, gr, gcolors, racks, rack_n, rack_count, rack_path, voice, page, pages, pstyle, eq}}` whenever the controller state changes (≤0.1 s after a knob step).
 - Keep the protocol controller-neutral when adding a second sender (Launch Control): prefer new optional fields over Alias-specific ones; the "Alias 8:" text prefix should become a field.
