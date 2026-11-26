@@ -5,3 +5,4 @@
 - 2026-11-23: Screenshots in the README (`screenshots/`).
 - 2026-11-24: Links point to alias8-scribble (the Alias8_Live script repo was renamed).
 - 2026-11-26: Opening `viewer.html` straight from Finder (file://) now jumps to http://localhost:8643, or says to start the server, instead of hanging on "connecting…".
+- 2026-11-26: Landscape: rack name, rack strip and page strip share one line above the knobs; the knobs may shrink to 40 % (was 60 %); an empty device-parameter line keeps no space in short windows. All 16 knobs now fit on a 16:10 laptop screen. Portrait unchanged.

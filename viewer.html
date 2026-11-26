@@ -186,6 +186,15 @@ main.idle > :not(#ratebox):not(#owner):not(#eqviz) { opacity: 0.5; }   /* the EQ
 #rackrow #rackstrip:empty { display: none; }
 #rackrow #rackname { margin: 0; }
 #rackrow:has(#rackname:empty):has(#rackstrip:empty) { display: none; }
+/* landscape: rack name, rack strip and page strip share one line, so the knobs get the height */
+#app:not(.portrait) #panels.show { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr);
+  column-gap: 14px; align-content: safe center; }
+#app:not(.portrait) #rackrow { flex-direction: row; align-items: center; flex-wrap: nowrap; overflow: hidden; margin: 0 0 6px 0; }
+#app:not(.portrait) #rackrow #rackstrip { flex-wrap: nowrap; overflow: hidden; }
+#app:not(.portrait) #pgstrip { align-self: center; margin: 0 4px 6px; }
+#app:not(.portrait) #pgstrip.off, :root.no-pagestrip #app:not(.portrait) #pgstrip { display: none; }
+#app:not(.portrait) #macros { grid-column: 1 / -1; align-self: start; }
+#app:not(.portrait) #rackrow:has(#rackname:empty):has(#rackstrip:empty) + #pgstrip { grid-column: 1 / -1; }
 /* 1. the kind of rack in colour (--kc, set per kind): a word chip and the left edge of the rack name (kindCol), a frame round the knobs (kindFrame) */
 #rackname .kw { display: none; font-size: 0.62em; font-weight: 800; letter-spacing: 0.1em; padding: 2px 6px; border-radius: 5px;
   color: color-mix(in srgb, var(--kc) 70%, var(--text)); background: color-mix(in srgb, var(--kc) 18%, transparent); }
@@ -449,6 +458,8 @@ main.idle > :not(#ratebox):not(#owner):not(#eqviz) { opacity: 0.5; }   /* the EQ
   #app:not(.portrait) #mctrl { width: clamp(16px, 3vh, 30px); }
   #app:not(.portrait) #mtext { font-size: clamp(12px, 2.4vh, 22px); margin-top: 3px; }
   #app:not(.portrait) #panels { padding-top: 6px; }
+  #app:not(.portrait) #targets:empty { min-height: 0; margin-top: 0; }   /* no empty line kept for it: the knobs need the height */
+  #app:not(.portrait) #meterWrap { margin-top: 4px; }
   #app:not(.portrait) .knob svg { max-width: calc(clamp(40px, 10.5vh, 80px) * var(--ks, 1)); }
   #app:not(.portrait) .col { height: clamp(44px, 9vh, 90px); }
 }
@@ -1679,7 +1690,8 @@ function fitPanel() {
   var ks = 1;
   panels.style.setProperty("--ks", "1");
   var over = function () { return mbox.getBoundingClientRect().bottom > panels.getBoundingClientRect().bottom - 2; };
-  while (ks > 0.6 && over()) { ks = Math.round((ks - 0.05) * 100) / 100; panels.style.setProperty("--ks", String(ks)); }
+  var minKs = el("app").classList.contains("portrait") ? 0.6 : 0.4;   // short landscape windows need smaller knobs
+  while (ks > minKs && over()) { ks = Math.round((ks - 0.05) * 100) / 100; panels.style.setProperty("--ks", String(ks)); }
 }
 var fitHeadsRaf = null;
 function fitHeadsLater() { if (!fitHeadsRaf) fitHeadsRaf = requestAnimationFrame(function () { fitHeadsRaf = null; fitPanel(); fitHeads(); }); }
