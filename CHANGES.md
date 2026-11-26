@@ -4,3 +4,4 @@
 - 2026-11-23: Added an MIT license (`LICENSE`).
 - 2026-11-23: Screenshots in the README (`screenshots/`).
 - 2026-11-24: Links point to alias8-scribble (the Alias8_Live script repo was renamed).
+- 2026-11-26: Opening `viewer.html` straight from Finder (file://) now jumps to http://localhost:8643, or says to start the server, instead of hanging on "connecting…".

@@ -2473,7 +2473,18 @@ function meterFrame(now) {
 }
 
 // ---------- connection ----------
+var SERVER_URL = "http://localhost:8643/";
 function connect() {
+  if (location.protocol === "file:") {   // opened by double-clicking viewer.html: it only works when served by scribble_strip.py
+    el("connText").textContent = "not served – opening " + SERVER_URL;
+    fetch(SERVER_URL, { mode: "no-cors" })
+      .then(function () { location.replace(SERVER_URL); })
+      .catch(function () {
+        el("connText").textContent = "server not running";
+        el("main").textContent = "Double-click Start Scribble Strip.command, then open " + SERVER_URL;
+      });
+    return;
+  }
   var es = new EventSource("/events");
   es.onopen = function () { el("dot").className = "on"; el("connText").textContent = "connected"; el("conn").classList.add("ok"); };
   es.onmessage = function (e) {
