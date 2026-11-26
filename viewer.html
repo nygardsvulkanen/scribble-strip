@@ -816,8 +816,9 @@ function show(msg) {
   meter(msg);
   activeKnob(msg.macro, msg);
   var mn = msg.macro && msg.macro[0], lm = lastMacros;
-  // the curve only when the macro really moves an EQ device (targets_eq from the script; an older script sends none)
-  if (mn && lm && lm.items && grKey(msg.macro[1]) === grKey(lm.owner) && eqIsColour(mn) && msg.targets_eq !== false) {
+  // the curve only when the macro really moves an EQ device (targets_eq from the script: true, false, or null = not
+  // known yet, sent again ~0.1 s later; an older script sends none: as before)
+  if (mn && lm && lm.items && grKey(msg.macro[1]) === grKey(lm.owner) && eqIsColour(mn) && (msg.targets_eq === true || msg.targets_eq === undefined)) {
     var mit = lm.items[mn - 1];                    // the turned macro's new value, before the next state arrives
     if (mit && typeof msg.target === "number" && !msg.pickup) { mit.v = msg.target; mit.text = p.value || mit.text; }
     eqShow(mn, msg.targets);

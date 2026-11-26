@@ -7,3 +7,4 @@
 - 2026-11-26: Opening `viewer.html` straight from Finder (file://) now jumps to http://localhost:8643, or says to start the server, instead of hanging on "connecting…".
 - 2026-11-26: Landscape: rack name, rack strip and page strip share one line above the knobs; the knobs may shrink to 40 % (was 60 %); an empty device-parameter line keeps no space in short windows. All 16 knobs now fit on a 16:10 laptop screen. Portrait unchanged.
 - 2026-11-26: The Colour EQ curve only shows when the turned macro really moves an EQ device (`targets_eq` from the script); an older script without that field behaves as before.
+- 2026-11-26: EQ curve: `targets_eq: null` (not known yet) hides it too; it shows on `true` (sent again ~0.1 s after the step) or when the field is missing (older script).
