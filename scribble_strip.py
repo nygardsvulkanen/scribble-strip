@@ -161,7 +161,19 @@ class Handler(BaseHTTPRequestHandler):
                 fwd = {"cmd": "nextrack"}
             elif cmd.get("cmd") == "setrack":           # a chip in the rack strip: that rack
                 fwd = {"cmd": "setrack", "i": int(cmd.get("i") or 0)}
-            elif cmd.get("cmd") == "racktap":           # settings: tap the selected track again = next rack
+            elif cmd.get("cmd") == "knob":              # a mouse drag on one of the 16 macro knobs (0.0-1.0)
+                fwd = {"cmd": "knob", "n": int(cmd.get("n")), "v": max(0.0, min(1.0, float(cmd.get("v"))))}
+                if cmd.get("end"):
+                    fwd["end"] = True
+            elif cmd.get("cmd") == "selecttrack":       # a click on a column / track: select it in Live
+                fwd = {"cmd": "selecttrack"}
+                for k in ("col", "track", "ret"):
+                    if cmd.get(k) is not None:
+                        fwd[k] = int(cmd[k])
+                        break
+                else:
+                    raise ValueError("selecttrack needs col, track or ret")
+            elif cmd.get("cmd") == "racktap":          # settings: tap the selected track again = next rack
                 fwd = {"cmd": "racktap", "on": bool(cmd.get("on"))}
             elif cmd.get("cmd") == "returns" and cmd.get("page") in ("perform", "track"):
                 fwd = {"cmd": "returns", "page": cmd["page"]}

@@ -275,6 +275,9 @@ main.idle > :not(#ratebox):not(#owner):not(#eqviz) { opacity: 0.5; }   /* the EQ
 .knob .val { font-size: 22px; font-weight: 700; fill: var(--text); text-anchor: middle; dominant-baseline: central; }
 .knob .nm { font-size: clamp(12px, 1.3vw, 17px); color: var(--muted); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .knob.none { opacity: 0.3; }
+#macros .knob:not(.none):not(.locked) { cursor: ns-resize; touch-action: none; user-select: none; -webkit-user-select: none; }
+#macros .knob.dragging { background: color-mix(in srgb, #ffffff 10%, color-mix(in srgb, var(--gs) 20%, var(--base))); }
+#map .col:not(.empty), #trkStrip .ob, #retStrip .ob { cursor: pointer; }
 /* with Tint on, the knob panels keep their own (untinted) dark base, so they don't wash out */
 :root.tint .grp, :root.tint #pgrid .pcell.tint { box-shadow: 0 0 0 1px color-mix(in srgb, #000000 25%, transparent); }
 /* the knob being turned */
@@ -816,6 +819,10 @@ function show(msg) {
   meter(msg);
   activeKnob(msg.macro, msg);
   var mn = msg.macro && msg.macro[0], lm = lastMacros;
+  if (msg.mouse && drag && mn === drag.j + 1 && lm && lm.items && lm.items[drag.j] && p.value) {   // Live's text for the dragged knob
+    lm.items[drag.j].text = p.value;
+    dragKnobLocal(drag.j, drag.v);
+  }
   // the curve only for a Colour macro with an EQ-like name (Tilt, Low Cut, Air ...; not Drive, Phaser or an unknown
   // name) and an EQ Eight on the track (Live doesn't tell a script what a macro moves, so the name decides)
   if (mn && lm && lm.items && grKey(msg.macro[1]) === grKey(lm.owner) && eqIsColour(mn) && eqIsEqMacro(mn)) {
@@ -1430,6 +1437,7 @@ function showMap(st) {
   (st.cols || []).forEach(function (c, i) {
     var box = document.createElement("div");
     box.className = "col";
+    box.dataset.i = i;                             // the script's column number (clicks: selecttrack)
     var num = document.createElement("div");
     num.className = "num";
     num.appendChild(document.createTextNode(String(i + 1)));
@@ -1523,6 +1531,7 @@ function fillStrip(strip, items, label, isRet) {
   var inRing = function (i) { return isRet ? !!(items[i] && items[i].on) : (firstOn >= 0 && i >= firstOn && i <= lastOn); };
   items.forEach(function (it, i) {
     var b = document.createElement("div");
+    b.dataset.i = i;                               // index in the set's tracks / returns (clicks: selecttrack)
     b.className = "ob" + (inRing(i) ? " on" : "") + (it.reach === false ? " out" : "") + (it.group ? " ogrp" : "") + (isRet ? " ret" : "") +
       (!isRet && it.depth ? " d" + Math.min(3, it.depth) : "");
     if (inRing(i) && !inRing(i - 1)) b.classList.add("first");
@@ -1778,6 +1787,7 @@ function ownerChanged(m) {
   }
 }
 function showMacros(m) {
+  keepDragged(m);
   lastMacros = m;
   var ow = m ? m.owner : null;
   var changed = shownOwner !== undefined && ow !== shownOwner;
@@ -2245,6 +2255,114 @@ function sendControl(obj) {
     })
     .catch(function () { notice("Can't reach the Scribble Strip - start it again"); });
 }
+// ---------- mouse control: drag a knob up/down (Shift = fine), wheel over a knob, click a track to select it ----------
+var DRAG_PX = 200, DRAG_FINE = 5, KNOB_SEND_MS = 35, KNOB_HOLD_MS = 600;
+var drag = null;                                 // {j, knob, y, v, sentAt, timer, endAt}
+function knobItem(j) { return lastMacros && lastMacros.items ? lastMacros.items[j] : null; }
+function knobUsable(j) { var it = knobItem(j); return it && typeof it.v === "number" && !it.locked; }
+function dragKnobLocal(j, v) {                   // redraw at once; Live's answer follows ~0.1 s later
+  var it = knobItem(j);
+  if (!it) return;
+  it.v = v;
+  fillKnob(knobs[j], it, knobs[j].querySelector(".nm").textContent, j + 1);
+}
+function sendKnob(final) {
+  if (!drag) return;
+  clearTimeout(drag.timer); drag.timer = null;
+  drag.sentAt = performance.now();
+  var o = { cmd: "knob", n: drag.j + 1, v: Math.round(drag.v * 10000) / 10000 };
+  if (final) o.end = true;
+  sendControl(o);
+}
+function queueKnob() {                           // at most one command every KNOB_SEND_MS, the last value always goes out
+  if (!drag || drag.timer) return;
+  var wait = KNOB_SEND_MS - (performance.now() - (drag.sentAt || 0));
+  if (wait <= 0) sendKnob(false); else drag.timer = setTimeout(function () { sendKnob(false); }, wait);
+}
+function knobMoveTo(j, v) {
+  v = Math.max(0, Math.min(1, v));
+  if (!drag || drag.j !== j) drag = { j: j, v: v, sentAt: 0, timer: null };
+  drag.v = v; drag.endAt = null;
+  dragKnobLocal(j, v);
+  queueKnob();
+}
+function knobAt(e) {
+  var k = e.target.closest && e.target.closest(".knob");
+  var j = k ? knobs.indexOf(k) : -1;
+  return j >= 0 && knobUsable(j) ? j : -1;
+}
+function endDrag() {
+  if (!drag) return;
+  sendKnob(true);
+  drag.endAt = performance.now();                // a moment more: state packets sent before the last step don't jump back
+  var d = drag;
+  setTimeout(function () { if (drag === d && d.endAt) drag = null; }, KNOB_HOLD_MS);
+}
+// while dragging (and just after) the state from Live lags behind the mouse: keep the dragged knob's value
+function keepDragged(m) {
+  if (!drag || !m || !m.items || !m.items[drag.j]) return;
+  if (drag.endAt && performance.now() - drag.endAt > KNOB_HOLD_MS) { drag = null; return; }
+  m.items[drag.j].v = drag.v;
+}
+function mouseControls() {
+  var box = el("macros");
+  box.addEventListener("pointerdown", function (e) {
+    if (e.button !== 0) return;
+    var j = knobAt(e);
+    if (j < 0) return;
+    e.preventDefault();
+    var k = knobs[j];
+    try { k.setPointerCapture(e.pointerId); } catch (err) {}
+    clearTimeout(drag && drag.timer);
+    drag = { j: j, v: knobItem(j).v, y: e.clientY, sentAt: 0, timer: null, pid: e.pointerId };
+    k.classList.add("dragging");
+    var move = function (ev) {
+      if (ev.pointerId !== drag.pid) return;
+      var dy = drag.y - ev.clientY;
+      drag.y = ev.clientY;
+      knobMoveTo(j, drag.v + dy / (DRAG_PX * (ev.shiftKey ? DRAG_FINE : 1)));
+    };
+    var up = function () {
+      k.removeEventListener("pointermove", move);
+      k.removeEventListener("pointerup", up);
+      k.removeEventListener("pointercancel", up);
+      k.classList.remove("dragging");
+      endDrag();
+    };
+    k.addEventListener("pointermove", move);
+    k.addEventListener("pointerup", up);
+    k.addEventListener("pointercancel", up);
+  });
+  var wheelEnd = null;
+  box.addEventListener("wheel", function (e) {
+    var j = knobAt(e);
+    if (j < 0) return;
+    e.preventDefault();
+    var base = drag && drag.j === j ? drag.v : knobItem(j).v;
+    var step = (e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY) / (DRAG_PX * 10 * (e.shiftKey ? DRAG_FINE : 1));
+    knobMoveTo(j, base - step);
+    clearTimeout(wheelEnd);
+    wheelEnd = setTimeout(endDrag, 250);
+  }, { passive: false });
+  box.addEventListener("dblclick", function (e) { if (e.target.closest(".knob")) e.stopPropagation(); });   // no fullscreen toggle
+  el("map").addEventListener("click", function (e) {          // a column of the 8-track strip: select that track
+    var c = e.target.closest(".col");
+    if (!c || c.classList.contains("empty")) return;
+    var i = parseInt(c.dataset.i, 10);
+    if (i >= 0) sendControl({ cmd: "selecttrack", col: i });
+  });
+  [["trkStrip", "track"], ["retStrip", "ret"]].forEach(function (s) {   // the overview: any track / return of the set
+    el(s[0]).addEventListener("click", function (e) {
+      var b = e.target.closest(".ob");
+      if (!b) return;
+      var i = parseInt(b.dataset.i, 10);
+      if (!(i >= 0)) return;
+      var o = { cmd: "selecttrack" }; o[s[1]] = i;
+      sendControl(o);
+    });
+  });
+}
+
 function nextRack() { sendControl({ cmd: "nextrack" }); }
 function prevRack() {                            // ← : the rack before (around to the last)
   var m = lastState && lastState.macros;
@@ -2622,6 +2740,7 @@ el("setBtn").addEventListener("click", function () { toggleSettings(); });
 el("setClose").addEventListener("click", function () { toggleSettings(false); });
 applyOpts();
 document.addEventListener("keydown", onKey);
+mouseControls();
 document.addEventListener("dblclick", function (e) {
   if (e.target.closest && (e.target.closest("button") || e.target.closest("#setPanel"))) return;
   if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(function () {});

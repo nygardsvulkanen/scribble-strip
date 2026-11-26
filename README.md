@@ -13,6 +13,7 @@ A big-text window that shows what your controller is doing in Ableton Live: the 
 - Start: double-click **Start Scribble Strip.command** (or `python3 scribble_strip.py`), then open http://localhost:8643.
 - Ports: UDP 9877 in (messages and state from the script), UDP 9878 out (commands to the script). They must match `STATUS_MIRROR_PORT` / `STATUS_CONTROL_PORT` in the script's settings.py.
 - `synths/` holds the background pictures (1200×1920 jpg).
+- Mouse: drag a knob up/down to turn its macro (hold Shift for fine steps) or scroll over it; click a track column or a box in the Tracks / Returns overview to select that track in Live.
 
 ## Guide
 

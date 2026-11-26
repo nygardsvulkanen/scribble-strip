@@ -4,8 +4,8 @@ Big-text browser display for Ableton Live: shows which track, parameter and valu
 Owner: Daniel (writes in Swedish; answer in Swedish, keep code/comments/docs in English).
 
 ## Layout
-- `scribble_strip.py` – local server: http://127.0.0.1:8643 serves `viewer.html` and `/synths/<file>`; listens on UDP 9877 for JSON from the Live script; POST /control → UDP 9878 back to the script (`returns`, `nextrack`, `setrack`, `racktap`).
-- `viewer.html` – all UI in one file (always dark; Settings key "," with tabs Knobs, Racks, Meters, Window; keys S/←/→ racks, R returns, L layout, B tint).
+- `scribble_strip.py` – local server: http://127.0.0.1:8643 serves `viewer.html` and `/synths/<file>`; listens on UDP 9877 for JSON from the Live script; POST /control → UDP 9878 back to the script (`returns`, `nextrack`, `setrack`, `racktap`, `knob` {n 1-16, v 0-1, end}, `selecttrack` {col | track | ret}).
+- `viewer.html` – all UI in one file (always dark; Settings key "," with tabs Knobs, Racks, Meters, Window; keys S/←/→ racks, R returns, L layout, B tint). Mouse control: `mouseControls()` – drag/wheel on the 16 knobs (one `knob` command per 35 ms at most; `keepDragged` holds the dragged value against lagging state packets), clicks on track columns / overview boxes send `selecttrack`.
 - `synths/*.jpg` – Daniel's own 1200×1920 pictures (protein, sh4d, s4, modelcycles, gr1, returns, bus, audio, externalinstrument, abletoninstrument).
 - `Start Scribble Strip.command` – double-click starter (macOS).
 
