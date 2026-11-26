@@ -8,3 +8,4 @@
 - 2026-11-26: Landscape: rack name, rack strip and page strip share one line above the knobs; the knobs may shrink to 40 % (was 60 %); an empty device-parameter line keeps no space in short windows. All 16 knobs now fit on a 16:10 laptop screen. Portrait unchanged.
 - 2026-11-26: The Colour EQ curve only shows when the turned macro really moves an EQ device (`targets_eq` from the script); an older script without that field behaves as before.
 - 2026-11-26: EQ curve: `targets_eq: null` (not known yet) hides it too; it shows on `true` (sent again ~0.1 s after the step) or when the field is missing (older script).
+- 2026-11-26: EQ curve decided by the macro name instead of `targets_eq` (Live never reports the values of macro-mapped parameters, so the script cannot see what a macro moves): only EQ-like names (not Drive/Saturation/Tape/Phaser or unknown names), and only with an EQ Eight on the track. `COLOUR_EQ` can set a type or "off" per name.

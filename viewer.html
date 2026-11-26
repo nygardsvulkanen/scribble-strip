@@ -816,9 +816,9 @@ function show(msg) {
   meter(msg);
   activeKnob(msg.macro, msg);
   var mn = msg.macro && msg.macro[0], lm = lastMacros;
-  // the curve only when the macro really moves an EQ device (targets_eq from the script: true, false, or null = not
-  // known yet, sent again ~0.1 s later; an older script sends none: as before)
-  if (mn && lm && lm.items && grKey(msg.macro[1]) === grKey(lm.owner) && eqIsColour(mn) && (msg.targets_eq === true || msg.targets_eq === undefined)) {
+  // the curve only for a Colour macro with an EQ-like name (Tilt, Low Cut, Air ...; not Drive, Phaser or an unknown
+  // name) and an EQ Eight on the track (Live doesn't tell a script what a macro moves, so the name decides)
+  if (mn && lm && lm.items && grKey(msg.macro[1]) === grKey(lm.owner) && eqIsColour(mn) && eqIsEqMacro(mn)) {
     var mit = lm.items[mn - 1];                    // the turned macro's new value, before the next state arrives
     if (mit && typeof msg.target === "number" && !msg.pickup) { mit.v = msg.target; mit.text = p.value || mit.text; }
     eqShow(mn, msg.targets);
@@ -1174,6 +1174,12 @@ function eqHide() {
   var c = el("eqviz");
   c.classList.remove("show");
   el("stage").classList.remove("eqside");
+}
+function eqIsEqMacro(n) {                              // macro n (1-16) sounds like an EQ band, and the track has an EQ Eight
+  var lm = lastMacros, it = lm && lm.items && lm.items[n - 1];
+  if (!it || !(lm.eq && lm.eq.bands)) return false;
+  var t = eqTypeOf(it.name)[0];                        // settings.py COLOUR_EQ can name it: "Honk": "mid 800", "Damp": "off"
+  return !!t && t !== "off" && t !== "harmonics" && t !== "notch";
 }
 function eqIsColour(n) { var gi = eqGroup(); return gi >= 0 && n >= gi * 4 + 1 && n <= gi * 4 + 4; }
 // Where the curve goes: in the free space under the big text if there is room (portrait), otherwise to the right of it
