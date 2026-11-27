@@ -466,6 +466,18 @@ main.idle > :not(#ratebox):not(#owner):not(#eqviz) { opacity: 0.5; }   /* the EQ
   #app:not(.portrait) .knob svg { max-width: calc(clamp(40px, 10.5vh, 80px) * var(--ks, 1)); }
   #app:not(.portrait) .col { height: clamp(44px, 9vh, 90px); }
 }
+/* landscape: the big text, value, hint and pickup meter only in the left third of the window
+   (the rate box stays at the top right, the EQ curve goes beside the text); font sizes follow the narrower column */
+#app:not(.portrait) main#stage > :not(#ratebox):not(#eqviz) { max-width: calc(100vw / 3 - 4vw); }
+#app:not(.portrait) main#stage > #meterWrap { width: calc(100vw / 3 - 4vw); }
+#app:not(.portrait) #owner { font-size: clamp(14px, min(1.7vw, 5.3vh), 44px); }
+#app:not(.portrait) #main { font-size: clamp(20px, min(2.9vw, 9vh), 84px); }
+#app:not(.portrait) #value { font-size: clamp(18px, min(2.5vw, 8vh), 72px); }
+#app:not(.portrait) #hint { font-size: clamp(12px, min(1.3vw, 4.2vh), 34px); }
+#app:not(.portrait) #targets { font-size: clamp(11px, min(1vw, 2.7vh), 24px); }
+#app:not(.portrait) #mtext { font-size: clamp(11px, min(0.95vw, 2.6vh), 22px); }
+#app:not(.portrait) #meter, #app:not(.portrait) #mctrl { height: clamp(16px, min(1.6vw, 3.6vh), 40px); }
+#app:not(.portrait) #mctrl { width: clamp(16px, min(1.6vw, 3.6vh), 40px); }
 
 /* ---------- PORTRAIT: a standing 16:9 screen (e.g. a 7" display, 600 x 1024) ---------- */
 #app.portrait header { padding: 6px 12px; font-size: 15px; gap: 8px; flex-wrap: wrap; }
@@ -1206,9 +1218,13 @@ function placeEq() {
     var top = el("main").getBoundingClientRect().top - sr.top, bot = mr.top - sr.top - 8;
     var rb = el("ratebox").getBoundingClientRect();
     if (rb.height && rb.bottom - sr.top > top) top = rb.bottom - sr.top + 6;
-    var ww = Math.min(w * 0.44, (bot - top) * 3.2);
+    var ww = Math.min(w * 0.44, (bot - top) * 3.2), left = sr.width - padL - ww;
+    if (!el("app").classList.contains("portrait")) {    // landscape: the text has the left third, the curve sits just right of it
+      var colR = padL + window.innerWidth / 3 - window.innerWidth * 0.04 + 24;
+      ww = Math.min(sr.width - padL - colR, (bot - top) * 3.2, window.innerWidth / 3); left = colR;
+    }
     stage.classList.add("eqside");
-    c.style.left = (sr.width - padL - ww) + "px"; c.style.width = ww + "px";
+    c.style.left = left + "px"; c.style.width = ww + "px";
     c.style.top = top + "px"; c.style.height = Math.max(60, bot - top) + "px";
   }
   eqCur && (eqFrame.last = 0);
