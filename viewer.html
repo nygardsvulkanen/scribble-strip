@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Scribble Strip</title>
+<title>Scribble Monitor</title>
 <style>
 /* ---------- tokens ---------- */
 :root {
@@ -2250,10 +2250,10 @@ function cycleReturns() {
 // S / a click on the rack name: the knobs show the next rack on the track (an instrument rack and an effect rack ...)
 function sendControl(obj) {
   return fetch("/control", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(obj) })
-    .then(function (r) {   // an older scribble_strip.py refuses commands it doesn't know: say so instead of doing nothing
-      if (r && r.status === 400) notice("Restart the Scribble Strip (Start Scribble Strip.command) - it doesn't know this command yet");
+    .then(function (r) {   // an older scribble_monitor.py refuses commands it doesn't know: say so instead of doing nothing
+      if (r && r.status === 400) notice("Restart the Scribble Monitor (Start Scribble Monitor.command) - it doesn't know this command yet");
     })
-    .catch(function () { notice("Can't reach the Scribble Strip - start it again"); });
+    .catch(function () { notice("Can't reach the Scribble Monitor - start it again"); });
 }
 // ---------- mouse control: drag a knob up/down (Shift = fine), wheel over a knob, click a track to select it ----------
 var DRAG_PX = 200, DRAG_FINE = 5, KNOB_SEND_MS = 35, KNOB_HOLD_MS = 600;
@@ -2613,13 +2613,13 @@ function meterFrame(now) {
 // ---------- connection ----------
 var SERVER_URL = "http://localhost:8643/";
 function connect() {
-  if (location.protocol === "file:") {   // opened by double-clicking viewer.html: it only works when served by scribble_strip.py
+  if (location.protocol === "file:") {   // opened by double-clicking viewer.html: it only works when served by scribble_monitor.py
     el("connText").textContent = "not served – opening " + SERVER_URL;
     fetch(SERVER_URL, { mode: "no-cors" })
       .then(function () { location.replace(SERVER_URL); })
       .catch(function () {
         el("connText").textContent = "server not running";
-        el("main").textContent = "Double-click Start Scribble Strip.command, then open " + SERVER_URL;
+        el("main").textContent = "Double-click Start Scribble Monitor.command, then open " + SERVER_URL;
       });
     return;
   }

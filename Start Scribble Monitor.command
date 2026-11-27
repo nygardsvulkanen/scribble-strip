@@ -1,7 +1,7 @@
 #!/bin/bash
-# Starts the Scribble Strip's local server (no browser is opened).
+# Starts the Scribble Monitor's local server (no browser is opened).
 # Open http://localhost:8643 yourself in any browser, as many windows as you like.
-# It shows Live's status bar messages from the Alias8_Live script in big text.
+# It shows Live's status bar messages from the Alias8_Scribble script in big text.
 # Keep this window open while you use it; close it (or press Ctrl+C) to stop.
 
 cd "$(dirname "$0")" || exit 1
@@ -15,5 +15,5 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "Scribble Strip running at $URL  (open it in a browser; Ctrl+C or close this window to stop)"
-exec python3 scribble_strip.py
+echo "Scribble Monitor running at $URL  (open it in a browser; Ctrl+C or close this window to stop)"
+exec python3 scribble_monitor.py

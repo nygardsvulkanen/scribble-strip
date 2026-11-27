@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Scribble Strip.
+"""Scribble Monitor.
 
-Listens for the JSON status messages the Alias8_Live script sends over UDP and shows them in a
+Listens for the JSON status messages the Alias8_Scribble script sends over UDP and shows them in a
 browser window in big text. Uses only Python's standard library.
 
-    python3 scribble_strip.py            then open http://localhost:8643
+    python3 scribble_monitor.py            then open http://localhost:8643
 
 The page gets the messages live through Server-Sent Events (/events).
 """
@@ -18,7 +18,7 @@ import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-PORT_UDP = 9877          # must match STATUS_MIRROR_PORT in Alias8_Live/settings.py
+PORT_UDP = 9877          # must match STATUS_MIRROR_PORT in Alias8_Scribble/settings.py
 PORT_HTTP = 8643         # the viewer page: http://localhost:8643
 PORT_CONTROL = 9878      # commands back to the script (must match STATUS_CONTROL_PORT in settings.py)
 script_host = ["127.0.0.1"]   # where the script runs (the address its packets come from)
@@ -94,7 +94,7 @@ class Handler(BaseHTTPRequestHandler):
                 with open(PAGE_FILE, "rb") as f:
                     body = f.read()
             except OSError:
-                self.send_error(404, "viewer.html not found next to scribble_strip.py")
+                self.send_error(404, "viewer.html not found next to scribble_monitor.py")
                 return
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -213,7 +213,7 @@ def main():
         print("Can't open http://localhost:%d (is the viewer already running?): %s" % (PORT_HTTP, e))
         sys.exit(1)
     server.daemon_threads = True
-    print("Scribble Strip: http://localhost:%d  (listening for UDP on port %d)" % (PORT_HTTP, PORT_UDP))
+    print("Scribble Monitor: http://localhost:%d  (listening for UDP on port %d)" % (PORT_HTTP, PORT_UDP))
     print("Keep this window open. Press Ctrl+C to stop.")
     try:
         server.serve_forever()

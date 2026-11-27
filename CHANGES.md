@@ -1,4 +1,4 @@
-# Scribble Strip – changes
+# Scribble Monitor – changes
 
 - 2026-11-22: Renamed from "Alias 8 status viewer" and moved out of the Alias8_Live folder into its own repo (`status_viewer.py` → `scribble_strip.py`, `Start status viewer.command` → `Start Scribble Strip.command`, page title "Scribble Strip"). Same ports and protocol. Earlier history: `Docs/CHANGES.md` in alias8-live.
 - 2026-11-23: Added an MIT license (`LICENSE`).
@@ -10,3 +10,4 @@
 - 2026-11-26: EQ curve: `targets_eq: null` (not known yet) hides it too; it shows on `true` (sent again ~0.1 s after the step) or when the field is missing (older script).
 - 2026-11-26: EQ curve decided by the macro name instead of `targets_eq` (Live never reports the values of macro-mapped parameters, so the script cannot see what a macro moves): only EQ-like names (not Drive/Saturation/Tape/Phaser or unknown names), and only with an EQ Eight on the track. `COLOUR_EQ` can set a type or "off" per name.
 - 2026-11-26: Mouse control: drag a macro knob up/down to turn it (Shift = fine, ~200 px = full range), or use the scroll wheel over it; a click on a column of the 8-track strip or a box in the Tracks / Returns overview selects that track in Live. New commands `knob` {n, v, end} and `selecttrack` {col | track | ret} (needs the matching Alias8_Live script and a restart of `scribble_strip.py`). While dragging, state packets from Live don't pull the knob back. Double-click on a knob no longer toggles full screen.
+- 2026-11-27: Renamed to **Scribble Monitor** (`scribble_strip.py` → `scribble_monitor.py`, `Start Scribble Strip.command` → `Start Scribble Monitor.command`, page title "Scribble Monitor"). The sending script is now `Alias8_Scribble` (was `Alias8_Live`). Same ports and protocol; the repo folder is still `scribble-strip`.
